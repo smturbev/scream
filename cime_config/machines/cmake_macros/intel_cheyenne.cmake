@@ -1,4 +1,4 @@
-set(APPEND KOKKOS_OPTIONS "-std=c++14 --cxxflags='-gxx-name=/glade/u/apps/ch/opt/gnu/10.1.0/bin/g++'")
+set(KOKKOS_OPTIONS "-DCMAKE_CXX_FLAGS='-std=c++14 -gxx-name=/glade/u/apps/ch/opt/gnu/10.1.0/bin/g++'")
 string(APPEND FFLAGS "  -qopt-report -xCORE_AVX2 -no-fma")
 string(APPEND CFLAGS "  -qopt-report -xCORE_AVX2 -no-fma")
 string(APPEND CXXFLAGS " -gxx-name=/glade/u/apps/ch/opt/gnu/10.1.0/bin/g++ ")
