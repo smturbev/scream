@@ -1644,15 +1644,6 @@ contains
       character(*), parameter :: subroutine_name = 'radiation_driver_sw'
 
 
-      ! Gather night/day column indices for subsetting SW inputs; we only want to
-      ! do the shortwave radiative transfer during the daytime to save
-      ! computational cost (and because RRTMGP will fail for cosine solar zenith
-      ! angles less than or equal to zero)
-      call set_daynight_indices(coszrs(1:ncol), day_indices(1:ncol), night_indices(1:ncol))
-      nday = count(day_indices(1:ncol) > 0)
-      nnight = count(night_indices(1:ncol) > 0)
-
-      !bloss: Move this below the computation of coszrs
       if (fixed_total_solar_irradiance<0) then
          ! Get orbital eccentricity factor to scale total sky irradiance
          tsi_scaling = get_eccentricity_factor()
@@ -1660,12 +1651,16 @@ contains
          ! For fixed TSI we divide by the default solar constant of 1360.9
          ! At some point we will want to replace this with a method that
          ! retrieves the solar constant
-         !bloss(Experimental fix for DP SCREAM RCE case): Divide by
-         !  coszrs(1) to produce correct TOA insolation in SOLIN
-         !  that matched fixed_total_solar_irradiance.  I'm not 
-         !  sure is this was whannah's original intent, though.
-         tsi_scaling = fixed_total_solar_irradiance / 1360.9_r8 / coszrs(1)
+         tsi_scaling = fixed_total_solar_irradiance / 1360.9_r8
       end if
+
+      ! Gather night/day column indices for subsetting SW inputs; we only want to
+      ! do the shortwave radiative transfer during the daytime to save
+      ! computational cost (and because RRTMGP will fail for cosine solar zenith
+      ! angles less than or equal to zero)
+      call set_daynight_indices(coszrs(1:ncol), day_indices(1:ncol), night_indices(1:ncol))
+      nday = count(day_indices(1:ncol) > 0)
+      nnight = count(night_indices(1:ncol) > 0)
 
       ! If no daytime columns in this chunk, then we return zeros
       if (nday == 0) then
