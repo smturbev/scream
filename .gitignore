@@ -20,6 +20,8 @@
 buildnmlc
 buildlibc
 buildlib_cmakec
+components/eam/src/physics/cam/.ipynb_checkpoints/
+*.ipynb_checkpoints/
 
 # Ignore emacs backup files
 *~
