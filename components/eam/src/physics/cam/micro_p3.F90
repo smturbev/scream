@@ -388,6 +388,7 @@ contains
        qv_sat_i(k)     = qv_sat(t_atm(k),pres(k),1)
 
        qv_supersat_i(k)    = qv(k)/qv_sat_i(k)-1._rtype
+       qv_supersat_l(k)    = qv(k)/qv_sat_l(k)-1._rtype
 
        rhofacr(k) = bfb_pow(rho_1000mb*inv_rho(k), 0.54_rtype)
        rhofaci(k) = bfb_pow(rho_600mb*inv_rho(k), 0.54_rtype)
@@ -464,8 +465,8 @@ contains
 
   SUBROUTINE p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, dt, inv_dt, &
        pres, inv_exner, inv_cld_frac_l, inv_cld_frac_i, inv_cld_frac_r, ni_activated, &
-       inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, &
-       t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_i, rhofaci, acn, qv, th_atm, qc, nc, qr, nr, qi, ni, &
+       inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl, & ! ST - added uzpl (vertical velocity)
+       t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_l, qv_supersat_i, rhofaci, acn, qv, th_atm, qc, nc, qr, nr, qi, ni, &
        qm, bm, latent_heat_vapor, latent_heat_sublim, latent_heat_fusion, qc_incld, qr_incld, qi_incld, qm_incld, nc_incld, nr_incld, &
        ni_incld, bm_incld, mu_c, nu, lamc, cdist, cdist1, cdistr, mu_r, lamr, logn0r, qv2qi_depos_tend, precip_total_tend, &
        nevapr, qr_evap_tend, vap_liq_exchange, vap_ice_exchange, liq_ice_exchange, pratot, &
@@ -480,7 +481,7 @@ contains
     real(rtype), intent(in) :: dt, inv_dt
 
     real(rtype), intent(in), dimension(kts:kte) :: pres, inv_exner, inv_cld_frac_l,  &
-         inv_cld_frac_i, inv_cld_frac_r, ni_activated, inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev
+         inv_cld_frac_i, inv_cld_frac_r, ni_activated, inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl
 
     real(rtype), intent(inout), dimension(kts:kte) :: t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_i, rhofaci, acn,        &
          qv, th_atm, qc, nc, qr, nr, qi, ni, qm, bm, latent_heat_vapor, latent_heat_sublim, latent_heat_fusion, qc_incld, qr_incld,                    &
@@ -758,7 +759,9 @@ contains
       !................................................................
       ! deposition/condensation-freezing nucleation
       call ice_nucleation(t_atm(k),inv_rho(k),&
-           ni(k),ni_activated(k),qv_supersat_i(k),inv_dt,do_predict_nc, do_prescribed_CCN, &
+           ni(k),ni_activated(k),qv_supersat_l(k),qv_supersat_i(k),inv_dt,qc(k),uzpl(k),&
+           do_predict_nc, do_prescribed_CCN,  &
+           do_new_lp_frz, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, &
            qinuc, ni_nucleat_tend)
 
       !................
@@ -1161,7 +1164,7 @@ contains
     real(rtype), intent(inout), dimension(its:ite,kts:kte)      :: bm      ! ice, rime volume mixing ratio    m3 kg-1
 
     real(rtype), intent(inout), dimension(its:ite,kts:kte)      :: qv         ! water vapor mixing ratio         kg kg-1
-    real(rtype), intent(inout), dimension(its:ite,kts:kte)      :: th_atm         ! potential temperature            K
+    real(rtype), intent(inout), dimension(its:iqite,kts:kte)      :: th_atm         ! potential temperature            K
     real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: pres       ! pressure                         Pa
     real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: dz        ! vertical grid spacing            m
     real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: nc_nuceat_tend      ! IN ccn activated number tendency kg-1 s-1
