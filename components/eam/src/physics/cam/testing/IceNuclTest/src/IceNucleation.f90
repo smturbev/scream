@@ -31,7 +31,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    qc, uzpl, & ! added for new ice freezing from BG
    do_predict_nc, do_prescribed_CCN,   & ! old 
    do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation,  & ! added for new ice freezing from BG ! TODO: add use_preexisting_ice
-   qinuc, ni_nucleat_tend)
+   qinuc, ni_nucleat_tend, nnuc1,nnuc2,nnuc3,nnuc4)
 
    !................................................................
    ! deposition/condensation-freezing nucleation
@@ -55,9 +55,10 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
 
    real(rtype), intent(inout) :: qinuc
    real(rtype), intent(inout) :: ni_nucleat_tend
+   real(rtype), intent(out) :: nnuc1, nnuc2, nnuc3, nnuc4 ! separate into categories based on pathway of nucleation
 
    ! local variables
-   real(rtype) :: dum, N_nuc, Q_nuc, nnuc1, qnuc1, nnuc2, qnuc2, nnuc3, qnuc3, nnuc4, qnuc4 ! separate into categories based on pathway of nucleation
+   real(rtype) :: dum, N_nuc, Q_nuc
    real(rtype) :: ndust, nsulf, qsmall, w, niimm, nidep, nihf, scrit ! for new BG code
    real(rtype) :: wbar1, wbar2, deles, esi, A, B, regm, n1 ! work variables
    
@@ -117,16 +118,23 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
       !BG added a qc>qsmall condition: based on recent findings, deposition freezing is negligible in mixed phase (e.g. Ansmann et al., 2018)
       if ( ( (t_atm.lt.258.15) .and. (t_atm .ge. 236.15) .and. (qv_supersat_i.ge.0.05) .and. (qc .gt. qsmall) ) .or. &
       ( (t_atm.lt.241.15) .and. (t_atm .ge. 236.15) .and. (qv_supersat_i.ge.0.005) .and. (qc .gt. qsmall) ) ) then  
-      !BG added this ^ to prevent too much "hom frz at -37"
-         ! freezing in mixed phase
+         !BG added this ^ to prevent too much "hom frz at -37" freezing in mixed phase
+         ! 1.) deposition/condensation-freezing nucleation for MIXED PHASE
+         ! allow ice nucleation if < -15 C and > 5% ice supersaturation
+         !BG added a min temp condition (-38 deg C, hom frz threshold)
+         !BG added a qc>qsmall condition: based on recent findings, deposition freezing 
+         ! is negligible in mixed phase (e.g. Ansmann et al., 2018)
+         !BG therefore in mixed phase we can freeze only by immersion and contact and maybe also condensation freezing 
+         !BG (e.g. Hoose and Mohler, 2012, Lohmann et al., 2016)
+         !if ( (t(i,k).lt.258.15) .and. (t(i,k) .gt. 236.15) .and. (supi(i,k).ge.0.05) .and. (qc(i,k) .gt. qsmall) ) then
+         !BG added a min temp condition (-38 deg C, hom frz threshold)
+         !BG added a qc>qsmall condition: based on recent findings, deposition freezing is negligible in mixed phase (e.g. Ansmann et al., 2018)
          dum = min(dum,150.e3*inv_rho) !BG increased max limit from 100 to 150/L
-         N_nuc = max(0._rtype,(dum-ni)*inv_dt)
-         if (N_nuc.ge.1.e-20) then
-            Q_nuc = max(0._rtype,(dum-ni)*mi0*inv_dt)
-            qinuc = Q_nuc
-            ni_nucleat_tend = N_nuc
-         endif
+         nnuc1 = max(0._rtype,(dum-ni)*inv_dt)
+      else
+         nnuc1=0.
       endif
+      
       if (no_cirrus_mohler_ice_nucleation .eq. .false.) then
          ! 2.) deposition/condensation-freezing nucleation for CIRRUS
          ! following Mohler et al., 2006 lab results for dust deposition freezing
@@ -140,13 +148,10 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
             ! T < -37degC and supersat > critical value
             dum = ndust*1e6*inv_rho !from /cm3 to kg-1 !assume some small INP/dust concentration, say 2/L which all freeze by deposition freezing
             dum = min(dum,100.e3*inv_rho) !max to 100/liter
-            N_nuc =max(0.,(dum-ni)*inv_dt)
-            if (N_nuc.ge.1.e-20) then
-               Q_nuc = max(0._rtype,(dum-ni)*mi0*inv_dt) 
-               qinuc = Q_nuc
-               ni_nucleat_tend = N_nuc
-            endif
+            nnuc2 =max(0.,(dum-ni)*inv_dt)
          endif 
+      else
+         nnuc2=0._rtype
       endif ! no_cirrus_mohler_ice_nucleation .eq. .false. 
 
       if (no_lphom_ice_nucleation .eq. .false.) then 
@@ -156,19 +161,16 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
 
              dum = nihf*1.e+6*inv_rho !from cm-3 to m-3 to kg-1 air
              dum = min(dum,80000.e+3*inv_rho) !set max to 80000 per L or 80/cc
-             N_nuc =max(0.,(dum-ni)*inv_dt)
-             if (N_nuc.ge.1.e-20) then
-                Q_nuc = max(0._rtype,(dum-ni)*mi0*inv_dt)
-                qinuc = Q_nuc
-                ni_nucleat_tend = N_nuc
-             endif !Nnuc
+             nnuc3 =max(0.,(dum-ni)*inv_dt)
          endif ! ( (t_atm.lt.236.15)  .and. (qv_supersat_i .ge. 0.42) )
+      else
+         nnuc3=0._rtype
       endif ! no_lphom_ice_nucleation .eq. .false.
       !ST copied from BG copied from e3sm code
       ! 4.) competition with HOMOG + HETEROG NUCLEATION (+preex ice if set to true)
       ! temp variables that depend on use_preexisting_ice
       wbar1 = w
-      ! wbar2 = w
+      wbar2 = w
       ! TODO: add pre-existing ice section from BG
       
       ! new lp freezing
@@ -229,23 +231,25 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
                   endif
               end if
           end if ! hetero vs homog frz
-          N_nuc = n1 !cm-3 
+          nnuc4 = n1 !cm-3 
+     else
+          nnuc4=0._rtype
      end if  ! ((t_atm.le.238.15) .and. (qv_supersat_i.ge.0.2) .and. (wbar1 .ge. 1.e-6)  )
-     dum = N_nuc*1.e+6*inv_rho !from cm-3 to m-3 to kg-1 air
+     dum = nnuc4*1.e+6*inv_rho !from cm-3 to m-3 to kg-1 air
      dum = min(dum,80.e+6*inv_rho) !set max to 80000 per L or 80/cc
  
      !N_nuc =max(0.,(dum-sum(nitot(i,k,:)))*odt)
-    !BG I think there is no logic behind the upper statement in case we do "real" freezing. 
+     !BG I think there is no logic behind the upper statement in case we do "real" freezing. 
      !   It may be reasonable for Meyers/Cooper parameterization, but not here...in my understanding!!!
      !BG changed therefore to: 
-     N_nuc = dum*inv_dt
- 
-    if (N_nuc.ge.1.e-20) then
-        ! BG Q_nuc = max(0.,(dum-sum(nitot(i,k,:)))*mi0*odt)
-        Q_nuc = dum*mi0*inv_dt !BG changed!!!
-        qinuc = Q_nuc
-        ni_nucleat_tend = N_nuc
-    endif ! no ice nucleation
+     nnuc4 = dum*inv_dt
+     N_nuc = nnuc1 + nnuc2 + nnuc3 + nnuc4
+     if (N_nuc.ge.1.e-20_rtype) then
+       Q_nuc = max(0._rtype,N_nuc*mi0)
+       qinuc = Q_nuc
+       ni_nucleat_tend = N_nuc
+     !else qinuc and ni_nucleat_tend do not change from previous timestep
+     endif ! N_nuc.ge.1.e-20
    end if ! do_new_lp_frz 
 end subroutine
 
