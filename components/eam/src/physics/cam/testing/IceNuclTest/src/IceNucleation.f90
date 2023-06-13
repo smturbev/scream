@@ -60,10 +60,11 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    ! local variables
    real(rtype) :: dum, N_nuc, Q_nuc
    real(rtype) :: ndust, nsulf, qsmall, w, niimm, nidep, nihf, scrit ! for new BG code
-   real(rtype) :: wbar1, wbar2, deles, esi, A, B, regm, n1 ! work variables
+   real(rtype) :: wbar1, wbar2, deles, esi, A, B, regm, n1, tc ! work variables
    
    ! convert uzpl to w (Pa/s -> m/s)
    !w = - uzpl * inv_rho * 0.102 ! omega * 1/rho * 1/g  [m/s]
+   w = uzpl ! for tests only
    
    ! minium allowable prognostic variables
     qsmall = 1.e-14
@@ -81,8 +82,8 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
       ! default freezing from SCREAM
       if ( t_atm .lt.T_icenuc .and. qv_supersat_i.ge.0.05_rtype) then
          if(.not. do_predict_nc .or. do_prescribed_CCN) then
-            dum = 0.005_rtype*exp(0.304_rtype*(T_zerodegc-t_atm))*1000._rtype*inv_rho
-            dum = min(dum,100.e3_rtype*inv_rho)
+            dum = 0.005_rtype*exp(0.304_rtype*(T_zerodegc-t_atm))*1000._rtype*inv_rho ! Cooper 1986
+            dum = min(dum,100000._rtype*inv_rho)
             N_nuc = max(0._rtype,(dum-ni)*inv_dt)
             if (N_nuc.ge.1.e-20_rtype) then
                Q_nuc = max(0._rtype,(dum-ni)*mi0*inv_dt)
@@ -129,8 +130,10 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
          !if ( (t(i,k).lt.258.15) .and. (t(i,k) .gt. 236.15) .and. (supi(i,k).ge.0.05) .and. (qc(i,k) .gt. qsmall) ) then
          !BG added a min temp condition (-38 deg C, hom frz threshold)
          !BG added a qc>qsmall condition: based on recent findings, deposition freezing is negligible in mixed phase (e.g. Ansmann et al., 2018)
-         dum = min(dum,150.e3*inv_rho) !BG increased max limit from 100 to 150/L
+         dum = 0.005_rtype*exp(0.304_rtype*(T_zerodegc-t_atm))*1000._rtype*inv_rho ! Cooper 1986
+         dum = min(dum,150000.*inv_rho) !BG increased max limit from 100 to 150/L
          nnuc1 = max(0._rtype,(dum-ni)*inv_dt)
+         !print*,"in mixed phase - nnuc1",nnuc1, dum, ni
       else
          nnuc1=0.
       endif
@@ -149,6 +152,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
             dum = ndust*1e6*inv_rho !from /cm3 to kg-1 !assume some small INP/dust concentration, say 2/L which all freeze by deposition freezing
             dum = min(dum,100.e3*inv_rho) !max to 100/liter
             nnuc2 =max(0.,(dum-ni)*inv_dt)
+            !print*,"in cirrus mohler - nnuc2",nnuc2
          endif 
       else
          nnuc2=0._rtype
@@ -159,9 +163,10 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
          if ( (t_atm.lt.236.15)  .and. (qv_supersat_i .ge. 0.42) ) then !added some very conservative supi condition not to always go in that loop ! 
              call hf(t_atm, w, qv_supersat_l, nsulf, nihf)
 
-             dum = nihf*1.e+6*inv_rho !from cm-3 to m-3 to kg-1 air
-             dum = min(dum,80000.e+3*inv_rho) !set max to 80000 per L or 80/cc
+             dum = nihf*1.e6*inv_rho !from cm-3 to m-3 to kg-1 air
+             dum = min(dum,80.e6*inv_rho) !set max to 80000 per L or 80/cc
              nnuc3 =max(0.,(dum-ni)*inv_dt)
+             !print*,"in lp hom - nnuc3", nnuc3
          endif ! ( (t_atm.lt.236.15)  .and. (qv_supersat_i .ge. 0.42) )
       else
          nnuc3=0._rtype
@@ -188,36 +193,41 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
       ! 120% is here taken as heterogeneous freezing limit
       !? BG - use higher RHi threshold? 
       !BG added wbar1>1e-6 for num stability (log of small number->problems)
+          tc= t_atm-273.15
           A = -1.4938 * log(ndust) + 12.884
-          B = -10.41  * log(ndust) - 205.46 ! ST convert back to Kelvin -67.69 -> +205.46
+          B = -10.41  * log(ndust) - 67.69 
 
           regm = A * log(wbar1) + B ! regm from LP2005 eq. 4.5
           ! 4a.) heterogeneous nucleation only
-          if (t_atm .gt. regm) then
+          !print*,"comp - regime threshold, A, B, wbar1, tc", regm, A, B, wbar1, tc
+          if (tc .gt. regm) then
               !	BG critical soot (in our case dust/some undefined HET ice nucleating particle) 
               ! ndust num conc above which only 
               ! HET freezing occurs, it depends on INP number and w
-                if((t_atm.lt.233.15) .and. (wbar1.gt.1.)) then ! exclude T<-40 & W>1m/s from hetero. nucleation
-                    call hf(t_atm,wbar1,qv_supersat_l,nsulf,nihf)
+                if((tc.lt.-40) .and. (wbar1.gt.1.)) then ! exclude T<-40 & W>1m/s from hetero. nucleation
+                    call hf(tc,wbar1,qv_supersat_l,nsulf,nihf)
                     niimm=0.
                     nidep=0.
                     n1=nihf ! TODO: add preexisting ice condition
+                    !print*,"in hom only"
                 else ! heterogeneous freezing
-                    call hetero(t_atm,wbar2,ndust,niimm,nidep)
+                    call hetero(tc,wbar2,ndust,niimm,nidep)
                     ! TODO: add preexisting ice condition
                     nihf=0.
-                    n1=niimm+nidep
+                    n1=niimm+nidep ! nidep=0 by definition
+                    !print*,"in hetero only"
                 endif !(tc.lt.-40. .and. wbar1.gt.1.)
           ! 4b.) homogeneous nucleation only
-          else if (t_atm.lt.regm-5.) then
-               call hf(t_atm,wbar1,qv_supersat_l,nsulf,nihf)
+          else if (tc.lt.regm-5.) then
+               call hf(tc,wbar1,qv_supersat_l,nsulf,nihf)
                niimm=0.
                nidep=0.
                n1=nihf ! TODO: add preexisting ice condition
           ! 4c.) transition between homogeneous and heterogeneous: interpolate in-between
           else
-              if ((t_atm.lt.233.15) .and. (wbar1.gt.1.)) then ! exclude T<-40 & W>1m/s from hetero. nucleation
-                  call hf(t_atm,wbar1,qv_supersat_l,nsulf,nihf)
+              if ((tc.lt.-40) .and. (wbar1.gt.1.)) then ! exclude T<-40 & W>1m/s from hetero. nucleation
+                  call hf(tc,wbar1,qv_supersat_l,nsulf,nihf)
+                  !print*,"in hom only again"
                   niimm=0.
                   nidep=0.
                   n1=nihf ! TODO: add preexisting ice condition
@@ -225,13 +235,16 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
                   call hf(regm-5.,wbar1,qv_supersat_l,nsulf,nihf)
                   call hetero(regm,wbar2,ndust,niimm,nidep) !BG the way I programmed it, nidep is 0 by definition
                   if (nihf .le. (niimm+nidep)) then
-                       n1 = nihf
+                       n1 = nihf 
                   else
-                       n1=(niimm+nidep)*((niimm+nidep)/nihf)**((t_atm-regm)/5.)
+                       n1=(niimm+nidep)*((niimm+nidep)/nihf)**((tc-regm)/5.) ! competition LP2005 eq. 4.10
+                       !print*,"true hom vs het comp", n1
                   endif
+                  !print*,"in het vs hom comp"
               end if
           end if ! hetero vs homog frz
           nnuc4 = n1 !cm-3 
+          !print*,"hom vs hetero frz - nnuc4",nnuc4
      else
           nnuc4=0._rtype
      end if  ! ((t_atm.le.238.15) .and. (qv_supersat_i.ge.0.2) .and. (wbar1 .ge. 1.e-6)  )
@@ -258,11 +271,11 @@ end subroutine
 !it assumes a fast and slow growth regime based on RHw and temperature.
 !it also needs sulphate aerosol number, which we prescribe to 30/cc.
 ! ST changed input to tk (temp in  Kelvin) and supersat wrt liquid
-subroutine hf(tk,ww,supersat,Na,Ni) !t_atm , w, qv_supersat_l, nsulf, nihom
-       real(rtype), intent(in)   :: tk, ww, supersat, Na
+subroutine hf(T,ww,supersat,Na,Ni) !tc , w, qv_supersat_l, nsulf, nihom
+       real(rtype), intent(in)   :: T, ww, supersat, Na
        real(rtype), intent(out)  :: Ni
 
-       real(rtype) ::    T,A1_fast,A21_fast,A22_fast,B1_fast,B21_fast,B22_fast
+       real(rtype) ::    A1_fast,A21_fast,A22_fast,B1_fast,B21_fast,B22_fast
        real(rtype) ::    A2_fast,B2_fast
        real(rtype) ::    C1_fast,C2_fast,k1_fast,k2_fast
        real(rtype) ::    A1_slow,A2_slow,B1_slow,B2_slow,B3_slow
@@ -296,14 +309,13 @@ subroutine hf(tk,ww,supersat,Na,Ni) !t_atm , w, qv_supersat_l, nsulf, nihom
        C2_slow  =2.312
 
        Ni = 0.0
-       T = tk-273.15 ! convert to degC
 
  !----------------------------
  !RHw parameters
        A = 6.0e-4*log(ww)+6.6e-3
        B = 6.0e-2*log(ww)+1.052
        C = 1.68  *log(ww)+129.35
-       Sw=((A*T*T+B*T+C)*0.01)-1 
+       Sw=((((A*T*T)+(B*T)+C))*0.01)-1. ! LP2005 eq 3.1; in this case around 0.3
 
        if((T.le.-37.0) .and. ((supersat).ge.Sw)) then
          !print*,'RHw crit in hf', RHw !BG
@@ -338,14 +350,14 @@ subroutine hf(tk,ww,supersat,Na,Ni) !t_atm , w, qv_supersat_l, nsulf, nihom
          endif
 
        end if
+     !print*, 'in call hf: Sw_crit > Sw? Ni', Sw, supersat, Ni
 
 end subroutine hf
 
 !-----BG added for ice nucleation-----
-! ST changed input to tk (temp in Kelvin)
-subroutine hetero(tk,ww,Ns,Nis,Nid)
+subroutine hetero(tc,ww,Ns,Nis,Nid)
 
-    real(rtype), intent(in)  :: tk, ww, Ns
+    real(rtype), intent(in)  :: tc, ww, Ns
     real(rtype), intent(out) :: Nis, Nid
 
     real(rtype) :: A11,A12,A21,A22,B11,B12,B21,B22
@@ -362,14 +374,14 @@ subroutine hetero(tk,ww,Ns,Nis,Nid)
       B12 = -0.0468
       B21 = -0.2667
       B22 = -1.4588
-      T = tk - 273.15
 
 !     ice from immersion nucleation (cm^-3)
 
       B = (A11+B11*log(Ns)) * log(ww) + (A12+B12*log(Ns))
       C =  A21+B21*log(Ns)
+      !print*,"in call hetero"
 
-      Nis = exp(A22) * Ns**B22 * exp(B*T) * ww**C
+      Nis = exp(A22) * Ns**B22 * exp(B*tc) * ww**C
       Nis = min(Nis,Ns)
 
       Nid = 0.0    ! don't include deposition nucleation for cirrus clouds when T<-37C
