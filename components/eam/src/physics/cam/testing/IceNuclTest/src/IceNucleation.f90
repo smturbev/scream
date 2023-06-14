@@ -11,10 +11,10 @@ module micro_p3_minimal
    public :: ice_nucleation
    
    ! Constants from micro_p3_utils
-     real(rtype), parameter :: mi0         = 3.77e-14 ! 4._rtype*piov3*900._rtype*1.e-18_rtype
+     real(rtype), parameter :: mi0         = 3.77e-14_rtype ! 4._rtype*piov3*900._rtype*1.e-18_rtype
      real(rtype), parameter :: T_zerodegc  = 273.15_rtype
      real(rtype), parameter :: T_icenuc    = 273.15_rtype - 15._rtype
-     real(rtype), parameter :: NumCirrusINP= 2.0e-3
+     real(rtype), parameter :: NumCirrusINP= 2.0e-3_rtype
      real(rtype), parameter :: NumCirrusSulf= 20._rtype
 
      ! !................................................................
@@ -117,6 +117,8 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
       !if ( (t(i,k).lt.258.15) .and. (t(i,k) .gt. 236.15) .and. (supi(i,k).ge.0.05) .and. (qc(i,k) .gt. qsmall) ) thenn
       !BG added a min temp condition (-38 deg C, hom frz threshold)
       !BG added a qc>qsmall condition: based on recent findings, deposition freezing is negligible in mixed phase (e.g. Ansmann et al., 2018)
+      tc= t_atm-T_zerodegc ! convert K to degC
+
       if ( ( (t_atm.lt.258.15) .and. (t_atm .ge. 236.15) .and. (qv_supersat_i.ge.0.05) .and. (qc .gt. qsmall) ) .or. &
       ( (t_atm.lt.241.15) .and. (t_atm .ge. 236.15) .and. (qv_supersat_i.ge.0.005) .and. (qc .gt. qsmall) ) ) then  
          !BG added this ^ to prevent too much "hom frz at -37" freezing in mixed phase
@@ -149,7 +151,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
          
          if ( (t_atm .lt. 236.15) .and. (qv_supersat_i .ge. scrit) ) then
             ! T < -37degC and supersat > critical value
-            dum = ndust*1e6*inv_rho !from /cm3 to kg-1 !assume some small INP/dust concentration, say 2/L which all freeze by deposition freezing
+            dum = ndust*inv_rho !from /cm3 to kg-1 !assume some small INP/dust concentration, say 2/L which all freeze by deposition freezing
             dum = min(dum,100.e3*inv_rho) !max to 100/liter
             nnuc2 =max(0.,(dum-ni)*inv_dt)
             !print*,"in cirrus mohler - nnuc2",nnuc2
@@ -157,16 +159,16 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
       else
          nnuc2=0._rtype
       endif ! no_cirrus_mohler_ice_nucleation .eq. .false. 
-
+      
       if (no_lphom_ice_nucleation .eq. .false.) then 
          ! 3.) HOM nucleation by using Liu and Penner, 2005 => ONLY HOMOG NUCLEATION!!!
          if ( (t_atm.lt.236.15)  .and. (qv_supersat_i .ge. 0.42) ) then !added some very conservative supi condition not to always go in that loop ! 
-             call hf(t_atm, w, qv_supersat_l, nsulf, nihf)
+             call hf(tc, w, qv_supersat_l, nsulf, nihf)
 
-             dum = nihf*1.e6*inv_rho !from cm-3 to m-3 to kg-1 air
+             dum = nihf*1.e6_rtype*inv_rho !from cm-3 to m-3 to kg-1 air
              dum = min(dum,80.e6*inv_rho) !set max to 80000 per L or 80/cc
              nnuc3 =max(0.,(dum-ni)*inv_dt)
-             !print*,"in lp hom - nnuc3", nnuc3
+             !print*,"in lp hom - nnuc3", nnuc3,dum,nihf
          endif ! ( (t_atm.lt.236.15)  .and. (qv_supersat_i .ge. 0.42) )
       else
          nnuc3=0._rtype
@@ -193,7 +195,6 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
       ! 120% is here taken as heterogeneous freezing limit
       !? BG - use higher RHi threshold? 
       !BG added wbar1>1e-6 for num stability (log of small number->problems)
-          tc= t_atm-273.15
           A = -1.4938 * log(ndust) + 12.884
           B = -10.41  * log(ndust) - 67.69 
 
@@ -350,7 +351,7 @@ subroutine hf(T,ww,supersat,Na,Ni) !tc , w, qv_supersat_l, nsulf, nihom
          endif
 
        end if
-     !print*, 'in call hf: Sw_crit > Sw? Ni', Sw, supersat, Ni
+     print*, 'in call hf: Sw > Sw_crit? Ni', (supersat.ge.Sw), Ni
 
 end subroutine hf
 

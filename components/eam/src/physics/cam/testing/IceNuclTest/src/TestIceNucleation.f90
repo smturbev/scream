@@ -18,10 +18,10 @@ program TestIceNucleation
   ni_activated = 0.
   inv_dt = 10.
   ! qv_supersat_l = -0.2 ! RHw = 0.8
-  do_predict_nc = .true.
+  do_predict_nc = .false.
   do_prescribed_CCN = .false.
-  do_new_lp_freezing = .false.
-  no_cirrus_mohler_ice_nucleation = .false.
+  do_new_lp_freezing = .true.
+  no_cirrus_mohler_ice_nucleation = .true.
   no_lphom_ice_nucleation = .false.
     
   do m = 1,8 ! loop over S_liq
@@ -54,7 +54,7 @@ program TestIceNucleation
 
             if(i+j+l+k+m.eq.5) write(*,*) 'w  qc  T  Sice  Sliq  Nnuc_old  qnuc_old  nnuc1  nnuc2  nnuc3  nnuc4'
             write(*,992) uzpl, qc, t_atm, qv_supersat_i, qv_supersat_l, nnuc, qq, nn1, nn2, nn3, nn4
-992 format(6f12.3, 1e12.4, 4f12.2)
+992 format(6f14.3, 1e14.4, 4f14.2)
           end do
         end do
       end do
