@@ -21,8 +21,8 @@ program TestIceNucleation
   do_predict_nc = .false.
   do_prescribed_CCN = .false.
   do_new_lp_freezing = .true.
-  no_cirrus_mohler_ice_nucleation = .true.
-  no_lphom_ice_nucleation = .false.
+  no_cirrus_mohler_ice_nucleation = .false.
+  no_lphom_ice_nucleation = .true.
     
   do m = 1,8 ! loop over S_liq
     qv_supersat_l = -0.3 + 0.1*real(m-1)
