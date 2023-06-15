@@ -153,13 +153,15 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
          
          if ( (t_atm .lt. 236.15_rtype) .and. (qv_supersat_i .ge. scrit) ) then
             ! T < -37degC and supersat > critical value
-            dum = ndust*inv_rho !from /cm3 to kg-1 !assume some small INP/dust concentration, say 2/L which all freeze by deposition freezing
+            dum = ndust*1e6_rtype*inv_rho !from /cm3 to kg-1 !assume some small INP/dust concentration, say 2/L which all freeze by deposition freezing
             dum = min(dum,100.e3_rtype*inv_rho) !max to 100/liter
             nnuc2 =max(0._rtype,(dum-ni)*inv_dt)
             !print*,"in cirrus mohler - nnuc2",nnuc2
+         else
+            nnuc2=0._rtype
          endif 
       else
-         nnuc2=0._rtype
+          nnuc2=0._rtype
       endif ! no_cirrus_mohler_ice_nucleation .eq. .false. 
       ! -------------------------------------------------------------
       if (no_lphom_ice_nucleation .eq. .false.) then 
@@ -175,7 +177,10 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
         else
              nnuc3=0._rtype
         endif ! ( (t_atm.lt.236.15)  .and. (qv_supersat_i .ge. 0.42) )  
+      else
+          nnuc3=0._rtype
       endif ! no_lphom_ice_nucleation .eq. .false.
+      
       !---------------------------------------------------------------
       !ST copied from BG copied from e3sm code and nucleate_ice.F90
       ! 4.) competition with HOMOG + HETEROG NUCLEATION (+preex ice if set to true)
@@ -272,7 +277,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
      !BG I think there is no logic behind the upper statement in case we do "real" freezing. 
      !   It may be reasonable for Meyers/Cooper parameterization, but not here...in my understanding!!!
      !BG changed therefore to: 
-     nnuc4 = dum*inv_dt
+     nnuc4 = (dum-ni)*inv_dt
      N_nuc = nnuc1 + nnuc2 + nnuc3 + nnuc4
      if (N_nuc.ge.1.e-20_rtype) then
        Q_nuc = max(0._rtype,N_nuc*mi0)
