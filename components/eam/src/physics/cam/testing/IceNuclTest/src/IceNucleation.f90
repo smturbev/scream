@@ -277,7 +277,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
      !BG I think there is no logic behind the upper statement in case we do "real" freezing. 
      !   It may be reasonable for Meyers/Cooper parameterization, but not here...in my understanding!!!
      !BG changed therefore to: 
-     nnuc4 = (dum-ni)*inv_dt
+     nnuc4 = max(0._rtype, dum-ni)*inv_dt
      N_nuc = nnuc1 + nnuc2 + nnuc3 + nnuc4
      if (N_nuc.ge.1.e-20_rtype) then
        Q_nuc = max(0._rtype,N_nuc*mi0)

@@ -5,8 +5,10 @@ module micro_p3_interface
   !! Interface between E3SM and P3 microphysics
   !!
   !! Author: Peter Caldwell
+  !! Edited by Sami Turbeville
   !!
-  !! Last updated: 2018-09-12
+  !! Last updated: 2023-06-15 - no changes
+  !! 
   !!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -127,7 +129,7 @@ module micro_p3_interface
    logical            :: micro_aerosolactivation = .false.   ! Use aerosol activation
    logical            :: micro_subgrid_cloud     = .false.   ! Use subgrid cloudiness
    logical            :: micro_tend_output       = .false.   ! Default microphysics tendencies to output file
-   logical            :: do_prescribed_CCN        = .false.   ! Use prescribed CCN
+   logical            :: do_prescribed_CCN       = .false.   ! Use prescribed CCN
    contains
 !===============================================================================
 subroutine micro_p3_readnl(nlfile)
@@ -755,34 +757,34 @@ end subroutine micro_p3_readnl
     logical :: lq(pcnst)   !list of what constituents to update
 
     !INTERNAL VARIABLES
-    real(rtype) :: dz(pcols,pver)        !geometric layer thickness              m
-    real(rtype) :: cldliq(pcols,pver)     !cloud liquid water mixing ratio        kg/kg
-    real(rtype) :: numliq(pcols,pver)     !cloud liquid water drop concentraiton  #/kg
-    real(rtype) :: rain(pcols,pver)       !rain water mixing ratio                kg/kg
-    real(rtype) :: numrain(pcols,pver)    !rain water number concentration        #/kg
-    real(rtype) :: qv_dry(pcols,pver)     !dry water vapor mixing ratio           kg/kg
-    real(rtype) :: qv_prev_dry(pcols,pver)!dry water vapor mixing ratio(previous time step) kg/kg
-    real(rtype) :: qv_wet_in(pcols,pver)  !wet water vapor mixing ratio (input for P3) kg/kg
-    real(rtype) :: qv_wet_out(pcols,pver) !wet water vapor mixing ratio (output from P3) kg/kg
-    real(rtype) :: ice(pcols,pver)        !total ice water mixing ratio           kg/kg
-    real(rtype) :: qm(pcols,pver)      !rime ice mixing ratio                  kg/kg
-    real(rtype) :: numice(pcols,pver)     !total ice crystal number concentration #/kg
-    real(rtype) :: rimvol(pcols,pver)     !rime volume mixing ratio               m3/kg
-    real(rtype) :: temp(pcols,pver)       !temperature copy needed for tendency   K
-    real(rtype) :: th(pcols,pver)         !potential temperature                  K
-    real(rtype) :: precip_liq_surf(pcols)         !precipitation rate, liquid             m s-1
-    real(rtype) :: precip_ice_surf(pcols)         !precipitation rate, solid              m s-1
+    real(rtype) :: dz(pcols,pver)          ! geometric layer thickness              m
+    real(rtype) :: cldliq(pcols,pver)      ! cloud liquid water mixing ratio        kg/kg
+    real(rtype) :: numliq(pcols,pver)      ! cloud liquid water drop concentraiton  #/kg
+    real(rtype) :: rain(pcols,pver)        ! rain water mixing ratio                kg/kg
+    real(rtype) :: numrain(pcols,pver)     ! rain water number concentration        #/kg
+    real(rtype) :: qv_dry(pcols,pver)      ! dry water vapor mixing ratio           kg/kg
+    real(rtype) :: qv_prev_dry(pcols,pver) ! dry water vapor mixing ratio(previous time step) kg/kg
+    real(rtype) :: qv_wet_in(pcols,pver)   ! wet water vapor mixing ratio (input for P3) kg/kg
+    real(rtype) :: qv_wet_out(pcols,pver)  ! wet water vapor mixing ratio (output from P3) kg/kg
+    real(rtype) :: ice(pcols,pver)         ! total ice water mixing ratio           kg/kg
+    real(rtype) :: qm(pcols,pver)          ! rime ice mixing ratio                  kg/kg
+    real(rtype) :: numice(pcols,pver)      ! total ice crystal number concentration #/kg
+    real(rtype) :: rimvol(pcols,pver)      ! rime volume mixing ratio               m3/kg
+    real(rtype) :: temp(pcols,pver)        ! temperature copy needed for tendency   K
+    real(rtype) :: th(pcols,pver)          ! potential temperature                  K
+    real(rtype) :: precip_liq_surf(pcols)  ! precipitation rate, liquid             m s-1
+    real(rtype) :: precip_ice_surf(pcols)  ! precipitation rate, solid              m s-1
 
-    real(rtype) :: rho_qi(pcols,pver)  !bulk density of ice                    kg m-1
-    real(rtype) :: pres(pcols,pver)       !pressure at midlevel                   hPa
+    real(rtype) :: rho_qi(pcols,pver)      ! bulk density of ice                    kg m-1
+    real(rtype) :: pres(pcols,pver)        ! pressure at midlevel                   hPa
     real(rtype) :: qv2qi_depos_tend(pcols,pver)
     real(rtype) :: precip_liq_flux(pcols,pver+1)     !grid-box average rain flux (kg m^-2s^-1) pverp
     real(rtype) :: precip_ice_flux(pcols,pver+1)     !grid-box average ice/snow flux (kg m^-2s^-1) pverp
-    real(rtype) :: inv_exner(pcols,pver)       !inverse exner formula for converting between potential and normal temp
-    real(rtype) :: cld_frac_r(pcols,pver)      !rain cloud fraction
-    real(rtype) :: cld_frac_l(pcols,pver)      !liquid cloud fraction
-    real(rtype) :: cld_frac_i(pcols,pver)      !ice cloud fraction
-    real(rtype) :: tend_out(pcols,pver,49) !microphysical tendencies
+    real(rtype) :: inv_exner(pcols,pver)   ! inverse exner formula for converting between potential and normal temp
+    real(rtype) :: cld_frac_r(pcols,pver)  ! rain cloud fraction
+    real(rtype) :: cld_frac_l(pcols,pver)  ! liquid cloud fraction
+    real(rtype) :: cld_frac_i(pcols,pver)  ! ice cloud fraction
+    real(rtype) :: tend_out(pcols,pver,49) ! microphysical tendencies
     real(rtype), dimension(pcols,pver) :: liq_ice_exchange ! sum of liq-ice phase change tendenices
     real(rtype), dimension(pcols,pver) :: vap_liq_exchange ! sum of vap-liq phase change tendenices
     real(rtype), dimension(pcols,pver) :: vap_ice_exchange ! sum of vap-ice phase change tendenices
@@ -815,10 +817,10 @@ end subroutine micro_p3_readnl
     !! COSP simulator
     real(rtype), pointer :: rel(:,:)          ! Liquid effective drop radius (microns)
     real(rtype), pointer :: rei(:,:)          ! Ice effective drop size (microns)
-    real(rtype), pointer :: flxprc(:,:)     ! P3 grid-box mean flux_large_scale_cloud_rain+snow at interfaces (kg/m2/s)
-    real(rtype), pointer :: flxsnw(:,:)     ! P3 grid-box mean flux_large_scale_cloud_snow at interfaces (kg/m2/s)
-    real(rtype), pointer :: reffrain(:,:)   ! P3 diagnostic rain effective radius (um)
-    real(rtype), pointer :: reffsnow(:,:)   ! P3 diagnostic snow effective radius (um)
+    real(rtype), pointer :: flxprc(:,:)       ! P3 grid-box mean flux_large_scale_cloud_rain+snow at interfaces (kg/m2/s)
+    real(rtype), pointer :: flxsnw(:,:)       ! P3 grid-box mean flux_large_scale_cloud_snow at interfaces (kg/m2/s)
+    real(rtype), pointer :: reffrain(:,:)     ! P3 diagnostic rain effective radius (um)
+    real(rtype), pointer :: reffsnow(:,:)     ! P3 diagnostic snow effective radius (um)
     real(rtype), pointer :: cvreffliq(:,:)    ! convective cloud liquid effective radius (um)
     real(rtype), pointer :: cvreffice(:,:)    ! convective cloud ice effective radius (um)
     !! radiation
@@ -1099,15 +1101,15 @@ end subroutine micro_p3_readnl
          ni_activated(its:ite,kts:kte),    & ! IN activated ice nuclei concentration kg-1
          relvar(its:ite,kts:kte),     & ! IN cloud liquid relative variance
          it,                          & ! IN     time step counter NOTE: starts at 1 for first time step
-         precip_liq_surf(its:ite),            & ! OUT    surface liquid precip rate       m s-1
-         precip_ice_surf(its:ite),            & ! OUT    surface frozen precip rate       m s-1
+         precip_liq_surf(its:ite),    & ! OUT    surface liquid precip rate       m s-1
+         precip_ice_surf(its:ite),    & ! OUT    surface frozen precip rate       m s-1
          its,                         & ! IN     horizontal index lower bound     -
          ite,                         & ! IN     horizontal index upper bound     -
          kts,                         & ! IN     vertical index lower bound       -
          kte,                         & ! IN     vertical index upper bound       -
          rel(its:ite,kts:kte),        & ! OUT    effective radius, cloud          m
          rei(its:ite,kts:kte),        & ! OUT    effective radius, ice            m
-         rho_qi(its:ite,kts:kte),  & ! OUT    bulk density of ice              kg m-3
+         rho_qi(its:ite,kts:kte),     & ! OUT    bulk density of ice              kg m-3
          do_predict_nc,               & ! IN     .true.=prognostic Nc, .false.=specified Nc
          do_prescribed_CCN,           & ! IN
          ! AaronDonahue new stuff
