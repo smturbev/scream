@@ -2606,10 +2606,17 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    real(rtype) :: dum, N_nuc, Q_nuc
    real(rtype) :: ndust, nsulf, qsmall, w, niimm, nidep, nihf, scrit ! for new BG code
    real(rtype) :: wbar1, wbar2, deles, esi, A, B, regm, n1, tc ! work variables
-   
+   logical(btype) :: nnuc1_flag, nnuc2_flag, nnuc3_flag, nnuc4_flag
+
    ! convert uzpl to w (Pa/s -> m/s)
    w = - uzpl * inv_rho * 0.102_rtype ! omega * 1/rho * 1/g  [m/s]
    !w = uzpl ! for tests only
+   
+   ! set flags for nnuc to true
+   nnuc1_flag = .true.
+   nnuc2_flag = .true.
+   nnuc3_flag = .true.
+   nnuc4_flag = .true.
    
    ! minium allowable prognostic variables
     qsmall = 1.e-14
@@ -2683,6 +2690,9 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
          dum = min(dum,150000._rtype*inv_rho) !BG increased max limit from 100 to 150/L
          nnuc1 = max(0._rtype,(dum-ni)*inv_dt)
          !print*,"in mixed phase - nnuc1",nnuc1, dum, ni
+         if (nnuc1_flag .eq. .true.) then
+               print*, "nnuc1 = ", nnuc1, "t_atm", t_atm
+               nnuc1_flag = .false.
       else
          nnuc1=0._rtype
       endif
@@ -2702,6 +2712,9 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
             dum = min(dum,100.e3_rtype*inv_rho) !max to 100/liter
             nnuc2 =max(0._rtype,(dum-ni)*inv_dt)
             !print*,"in cirrus mohler - nnuc2",nnuc2
+            if (nnuc2_flag .eq. .true.) then
+               print*, "nnuc2= ", nnuc2, "t_atm=", t_atm, "Sice=", qv_supersat_i
+               nnuc2_flag = .false.
          else
             nnuc2=0._rtype
          endif 
@@ -2719,6 +2732,9 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
              dum = min(dum,80.e6_rtype*inv_rho) !set max to 80000 per L or 80/cc
              nnuc3 =max(0._rtype,(dum-ni)*inv_dt)
              !print*,"in lp hom - nnuc3", nnuc3,dum,nihf
+             if (nnuc3_flag .eq. .true.) then
+               print*, "nnuc3= ", nnuc3, "t_atm=", t_atm, "Sice=", qv_supersat_i
+               nnuc3_flag = .false.
         else
              nnuc3=0._rtype
         endif ! ( (t_atm.lt.236.15)  .and. (qv_supersat_i .ge. 0.42) )  
@@ -2809,6 +2825,9 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
               end if
           end if ! hetero vs homog frz
           nnuc4 = n1 !cm-3 
+          if (nnuc4_flag .eq. .true.) then
+               print*, "nnuc4= ", nnuc4, "t_atm=", t_atm, "Sice=", qv_supersat_i
+               nnuc4_flag = .false.
           !print*,"hom vs hetero frz - nnuc4",nnuc4
      else
           nnuc4=0._rtype
