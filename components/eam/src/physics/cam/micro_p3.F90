@@ -1128,7 +1128,7 @@ contains
 
   SUBROUTINE p3_main(qc,nc,qr,nr,th_atm,qv,dt,qi,qm,ni,bm,   &
        pres,dz,nc_nuceat_tend,nccn_prescribed,ni_activated,inv_qc_relvar,it,precip_liq_surf,precip_ice_surf,its,ite,kts,kte,diag_eff_radius_qc,     &
-       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, uzpl, &
+       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, uzpl, &
        dpres,inv_exner,qv2qi_depos_tend,precip_total_tend,nevapr,qr_evap_tend,precip_liq_flux,precip_ice_flux,cld_frac_r,cld_frac_l,cld_frac_i,  &
        p3_tend_out,mu_c,lamc,liq_ice_exchange,vap_liq_exchange, &
        vap_ice_exchange,qv_prev,t_prev,col_location, &
@@ -1205,6 +1205,7 @@ contains
 
     ! INPUT for prescribed CCN option
     logical(btype), intent(in)                                  :: do_prescribed_CCN
+    logical(btype), intent(in)         :: do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation
 
     ! INPUT needed for PBUF variables used by other parameterizations
 
@@ -1250,7 +1251,7 @@ contains
     real(rtype), dimension(its:ite,kts:kte) :: qc_incld, qr_incld, qi_incld, qm_incld ! In cloud mass-mixing ratios
     real(rtype), dimension(its:ite,kts:kte) :: nc_incld, nr_incld, ni_incld, bm_incld ! In cloud number concentrations
 
-    real(rtype), dimension(its:ite,kts:kte)      :: inv_dz,inv_rho,ze_ice,ze_rain,prec,rho,       &
+    real(rtype), dimension(its:ite,kts:kte) :: inv_dz,inv_rho,ze_ice,ze_rain,prec,rho,       &
          rhofacr,rhofaci,acn,latent_heat_sublim,latent_heat_vapor,latent_heat_fusion,qv_sat_l,qv_sat_i,qv_supersat_l,qv_supersat_i,       &
          tmparr1,exner,uzpl
 
@@ -2606,20 +2607,14 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    real(rtype) :: dum, N_nuc, Q_nuc
    real(rtype) :: ndust, nsulf, qsmall, w, niimm, nidep, nihf, scrit ! for new BG code
    real(rtype) :: wbar1, wbar2, deles, esi, A, B, regm, n1, tc ! work variables
-   logical(btype) :: nnuc1_flag, nnuc2_flag, nnuc3_flag, nnuc4_flag
+   logical(btype) :: nnuc1_flag = .true., nnuc2_flag = .true. , nnuc3_flag = .true., nnuc4_flag = .true., nnuc_flag = .true., nnuc0_flag = .true.
 
    ! convert uzpl to w (Pa/s -> m/s)
    w = - uzpl * inv_rho * 0.102_rtype ! omega * 1/rho * 1/g  [m/s]
    !w = uzpl ! for tests only
    
-   ! set flags for nnuc to true
-   nnuc1_flag = .true.
-   nnuc2_flag = .true.
-   nnuc3_flag = .true.
-   nnuc4_flag = .true.
-   
    ! minium allowable prognostic variables
-    qsmall = 1.e-14
+   qsmall = 1.e-14
    
    ! get value from utils
    nsulf = NumCirrusSulf
@@ -2628,7 +2623,10 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    ! Meyers or Cooper? 
    ! dum = exp(-0.639+0.1296*100.*qv_supersat_i(i,k))*1000.*inv_rho(i,k)  !Meyers et al. (1992)
    ! dum = 0.005_rtype**exp(0.304_rtype*(T_zerodegc-t_atm))*1000._rtype*inv_rho   !Cooper (1986)
-   
+   if (nnuc0_flag) then
+       print*, "nnuc in ice_nucleation, do_new_lp_freezing:", do_new_lp_freezing
+       nnuc0_flag = .false.
+   endif
    ! choose default of bg_freezing 
    if ( do_new_lp_freezing .eq. .false. ) then
       ! default freezing from SCREAM
@@ -2646,6 +2644,10 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
             ! Ice nucleation predicted by aerosol scheme
             ni_nucleat_tend = max(0._rtype, (ni_activated - ni)*inv_dt)
             qinuc = ni_nucleat_tend * mi0
+         endif
+         if (nnuc_flag) then
+            print*, "nnuc std frz scheme, t_atm/do_predict_nc/do_prescribed_CCN/qv_supersat_i", t_atm, do_predict_nc, do_prescribed_CCN, qv_supersat_i
+            nnuc_flag = .false.
          endif
       endif
    else ! do_new_lp_freezing .eq. .true.
@@ -2693,7 +2695,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
          if (nnuc1_flag) then
                print*, "in mixed phase, nnuc1/t_atm =", nnuc1, t_atm
                nnuc1_flag = .false.
-         end if
+         endif
       else
          nnuc1=0._rtype
       endif

@@ -864,6 +864,7 @@ end subroutine micro_p3_readnl
 
     logical :: do_predict_nc           !prognostic droplet concentration or not?
     logical :: do_subgrid_clouds       !use subgrid cloudiness in tendency calculations?
+    logical :: do_new_lp_freezing=.true., no_cirrus_mohler_ice_nucleation=.false., no_lphom_ice_nucleation=.false.
     integer :: icol, ncol, k
     integer :: psetcols, lchnk
     integer :: itim_old
@@ -1112,6 +1113,9 @@ end subroutine micro_p3_readnl
          rho_qi(its:ite,kts:kte),     & ! OUT    bulk density of ice              kg m-3
          do_predict_nc,               & ! IN     .true.=prognostic Nc, .false.=specified Nc
          do_prescribed_CCN,           & ! IN
+         do_new_lp_freezing,          & ! IN     .true.=new ice nuc., .false.=standard p3 ice nuc
+         no_cirrus_mohler_ice_nucleation, & ! IN .true.=no cirrus mohler, .false.=cirrus mohler active
+         no_lphom_ice_nucleation,     & ! IN     .true.=no hom frz via LP2005, .false.=hom frz active
          ! AaronDonahue new stuff
          state%pdeldry(its:ite,kts:kte),  & ! IN pressure level thickness for computing total mass
          inv_exner(its:ite,kts:kte),      & ! IN exner values
