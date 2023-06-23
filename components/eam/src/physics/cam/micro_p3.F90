@@ -2627,9 +2627,11 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
        print*, "nnuc in ice_nucleation, do_new_lp_freezing:", do_new_lp_freezing
        nnuc0_flag = .false.
    endif
+   print*, "in nnuc stage", do_new_lp_freezing
    ! choose default of bg_freezing 
    if ( do_new_lp_freezing .eq. .false. ) then
       ! default freezing from SCREAM
+      print*, "in default scheme", do_new_lp_freezing
       if ( t_atm .lt.T_icenuc .and. qv_supersat_i.ge.0.05_rtype) then
          if(.not. do_predict_nc .or. do_prescribed_CCN) then
             dum = 0.005_rtype*exp(0.304_rtype*(T_zerodegc-t_atm))*1000._rtype*inv_rho ! Cooper 1986
@@ -2673,6 +2675,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
       !BG added a qc>qsmall condition: based on recent findings, deposition freezing is negligible in mixed phase (e.g. Ansmann et al., 2018)
       tc= t_atm-T_zerodegc ! convert K to degC
       ! --------------------------------------------------------
+      print*, "in new freezing scheme", do_new_lp_freezing
       if ( ( (t_atm.lt.258.15_rtype) .and. (t_atm .ge. 236.15_rtype) &
       .and. (qv_supersat_i.ge.0.05_rtype) .and. (qc .gt. qsmall) ) .or. &
       ( (t_atm.lt.241.15_rtype) .and. (t_atm .ge. 236.15_rtype) .and. &

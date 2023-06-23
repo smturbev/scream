@@ -289,6 +289,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
 end subroutine
 
 !BG added homo freezing by Liu and Penner, 2005
+! Same as from nucleate_ice.F90
 !===============================================================================
 !it assumes a fast and slow growth regime based on RHw and temperature.
 !it also needs sulphate aerosol number, which we prescribe to 30/cc.
