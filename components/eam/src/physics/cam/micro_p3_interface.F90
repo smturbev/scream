@@ -774,7 +774,7 @@ end subroutine micro_p3_readnl
     real(rtype) :: th(pcols,pver)          ! potential temperature                  K
     real(rtype) :: precip_liq_surf(pcols)  ! precipitation rate, liquid             m s-1
     real(rtype) :: precip_ice_surf(pcols)  ! precipitation rate, solid              m s-1
-
+    real(rtype) :: uzpl(pcols,pver)        ! vertical velocity, omega               Pa/s   ! added by ST for ice_nucleation
     real(rtype) :: rho_qi(pcols,pver)      ! bulk density of ice                    kg m-1
     real(rtype) :: pres(pcols,pver)        ! pressure at midlevel                   hPa
     real(rtype) :: qv2qi_depos_tend(pcols,pver)
