@@ -3650,8 +3650,8 @@ qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
    real(rtype), intent(out) :: qc2qi_berg_tend
 
    real(rtype) :: qi_tend
-   real(rtype) :: factor_small = 2., factor_large = 1. ! factor_small is for scaling the vapor deposition for ice of small particle mass
-   real(rtype) :: temp_xx, scaling_factor, epi_over_abi_mod ! added per HM's suggestion with code from PB
+   real(rtype) :: scaling_small = 2., scaling_large = 1. ! factor_small is for scaling the vapor deposition for ice of small particle mass
+   real(rtype) :: temp_xx, scaling_factor, epsi_over_abi_mod ! added per HM's suggestion with code from PB
 
    !INITIALIZE EVERYTHING TO 0.
    qc2qi_berg_tend = 0._rtype
@@ -3668,7 +3668,7 @@ qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
 
       ! convert this to a size-dependent scaling factor, which takes on a value of scaling_large
       !   for mass radius >= 35 microns and scaling_small for mass radius <=25 microns.
-      scaling factor = scaling_large + (scaling_small - scaling_large) * temp_xx
+      scaling_factor = scaling_large + (scaling_small - scaling_large) * temp_xx
 
       ! modify the deposition coefficient epsi/abi by this scaling factor
       epsi_over_abi_mod = scaling_factor*epsi/abi
