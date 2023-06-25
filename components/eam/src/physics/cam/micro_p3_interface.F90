@@ -855,6 +855,7 @@ end subroutine micro_p3_readnl
     real(rtype) :: cdnumc(pcols)
     real(rtype) :: icinc(pcols,pver)
     real(rtype) :: icwnc(pcols,pver)
+    real(rtype) :: dep_scaling_small=1._rtype
 
 
     integer :: it                      !timestep counter                       -
@@ -1113,6 +1114,7 @@ end subroutine micro_p3_readnl
          rho_qi(its:ite,kts:kte),     & ! OUT    bulk density of ice              kg m-3
          do_predict_nc,               & ! IN     .true.=prognostic Nc, .false.=specified Nc
          do_prescribed_CCN,           & ! IN
+         dep_scaling_small,           & ! IN     scaling factor for vapor deposition on small ice particles
          do_new_lp_freezing,          & ! IN     .true.=new ice nuc., .false.=standard p3 ice nuc
          no_cirrus_mohler_ice_nucleation, & ! IN .true.=no cirrus mohler, .false.=cirrus mohler active
          no_lphom_ice_nucleation,     & ! IN     .true.=no hom frz via LP2005, .false.=hom frz active

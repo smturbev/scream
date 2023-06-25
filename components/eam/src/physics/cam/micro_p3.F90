@@ -754,7 +754,7 @@ contains
            qr2qv_evap_tend,nr_evap_tend)
 
       call ice_deposition_sublimation(qi_incld(k), ni_incld(k), t_atm(k), &
-           qv_sat_l(k),qv_sat_i(k),epsi,abi,qv(k), inv_dt, &
+           qv_sat_l(k),qv_sat_i(k),epsi,abi,qv(k), inv_dt, dep_scaling_small, &
            qidep,qi2qv_sublim_tend,ni_sublim_tend,qiberg)
 
 444   continue
@@ -1128,7 +1128,7 @@ contains
 
   SUBROUTINE p3_main(qc,nc,qr,nr,th_atm,qv,dt,qi,qm,ni,bm,   &
        pres,dz,nc_nuceat_tend,nccn_prescribed,ni_activated,inv_qc_relvar,it,precip_liq_surf,precip_ice_surf,its,ite,kts,kte,diag_eff_radius_qc,     &
-       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, uzpl, &
+       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, dep_scaling_small, do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, uzpl, &
        dpres,inv_exner,qv2qi_depos_tend,precip_total_tend,nevapr,qr_evap_tend,precip_liq_flux,precip_ice_flux,cld_frac_r,cld_frac_l,cld_frac_i,  &
        p3_tend_out,mu_c,lamc,liq_ice_exchange,vap_liq_exchange, &
        vap_ice_exchange,qv_prev,t_prev,col_location &
@@ -1206,6 +1206,9 @@ contains
     ! INPUT for prescribed CCN option
     logical(btype), intent(in)                                  :: do_prescribed_CCN
     logical(btype), intent(in)         :: do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation
+    
+    ! INPUT for scaling factor in ice vapor deposition -ST
+    real(rtype), intent(in)            :: dep_scaling_small ! scaling factor for small ice mass, typically 0.5, 1 (no scaling), or 2
 
     ! INPUT needed for PBUF variables used by other parameterizations
 
@@ -3630,7 +3633,7 @@ subroutine update_prognostic_liquid(qc2qr_accret_tend,nc_accret_tend,qc2qr_autoc
 end subroutine update_prognostic_liquid
 
  subroutine ice_deposition_sublimation(qi_incld,ni_incld,t_atm,    &
-qv_sat_l,qv_sat_i,epsi,abi,qv, inv_dt,   &
+qv_sat_l,qv_sat_i,epsi,abi,qv, inv_dt, dep_scaling_small, &
 qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
 
    implicit none
@@ -3644,13 +3647,14 @@ qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
    real(rtype), intent(in)  :: abi
    real(rtype), intent(in)  :: qv
    real(rtype), intent(in)  :: inv_dt
+   real(rtype), intent(in)  :: dep_scaling_small
    real(rtype), intent(out) :: qv2qi_depos_tend
    real(rtype), intent(out) :: qi2qv_sublim_tend
    real(rtype), intent(out) :: ni_sublim_tend
    real(rtype), intent(out) :: qc2qi_berg_tend
 
    real(rtype) :: qi_tend
-   real(rtype) :: scaling_small = 2., scaling_large = 1. ! factor_small is for scaling the vapor deposition for ice of small particle mass
+   real(rtype) :: dep_scaling_large = 1. ! Not scaling large ice particles, only affecting cirrus clouds with dep_scaling_small
    real(rtype) :: temp_xx, scaling_factor, epsi_over_abi_mod ! added per HM's suggestion with code from PB
 
    !INITIALIZE EVERYTHING TO 0.
@@ -3668,7 +3672,7 @@ qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
 
       ! convert this to a size-dependent scaling factor, which takes on a value of scaling_large
       !   for mass radius >= 35 microns and scaling_small for mass radius <=25 microns.
-      scaling_factor = scaling_large + (scaling_small - scaling_large) * temp_xx
+      scaling_factor = dep_scaling_large + (dep_scaling_small - dep_scaling_large) * temp_xx
 
       ! modify the deposition coefficient epsi/abi by this scaling factor
       epsi_over_abi_mod = scaling_factor*epsi/abi
