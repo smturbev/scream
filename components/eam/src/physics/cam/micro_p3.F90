@@ -54,8 +54,9 @@ module micro_p3
        T_rainfrz, T_icenuc, T_homogfrz, iulog=>iulog_e3sm, &
        masterproc=>masterproc_e3sm, calculate_incloud_mixingratios, mu_r_constant, &
        lookup_table_1a_dum1_c, &
-       p3_qc_autocon_expon, p3_qc_accret_expon
-
+       p3_qc_autocon_expon, p3_qc_accret_expon, &
+       NumCirrusSulf, NumCirrusINP, & ! added for new ice_nucleation -ST
+       mi25, mi35 ! added for vapor dep scaling -ST
    use wv_sat_scream, only:qv_sat
 
   ! Bit-for-bit math functions.
@@ -345,7 +346,7 @@ contains
   SUBROUTINE p3_main_part1(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, dt, &
        pres, dpres, dz, nc_nuceat_tend, nccn_prescribed, inv_exner, exner,inv_cld_frac_l, inv_cld_frac_i, &
        inv_cld_frac_r, latent_heat_vapor, latent_heat_sublim, latent_heat_fusion,  &
-       t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_i, rhofacr, rhofaci, acn, qv, th_atm, &
+       t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_l, qv_supersat_i, rhofacr, rhofaci, acn, qv, th_atm, &
        qc, nc, qr, nr, &
        qi, ni, qm, bm, qc_incld, qr_incld, qi_incld, qm_incld, &
        nc_incld, nr_incld, ni_incld, bm_incld, is_nucleat_possible, is_hydromet_present)
@@ -559,7 +560,6 @@ contains
     integer :: dumi,k,dumj,dumii,dumjj,dumzz
 
     logical(btype) :: log_exitlevel, log_wetgrowth
-    logical(btype) :: log_exitlevel, log_wetgrowth
     
 
    rho_qm_cloud = 400._rtype
@@ -764,7 +764,7 @@ contains
       call ice_nucleation(t_atm(k),inv_rho(k),&
            ni(k),ni_activated(k),qv_supersat_l(k),qv_supersat_i(k),inv_dt,qc(k),uzpl(k),&
            do_predict_nc, do_prescribed_CCN,  &
-           do_new_lp_frz, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, &
+           do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, &
            qinuc, ni_nucleat_tend)
 
       !................
@@ -1131,7 +1131,7 @@ contains
        diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, uzpl, &
        dpres,inv_exner,qv2qi_depos_tend,precip_total_tend,nevapr,qr_evap_tend,precip_liq_flux,precip_ice_flux,cld_frac_r,cld_frac_l,cld_frac_i,  &
        p3_tend_out,mu_c,lamc,liq_ice_exchange,vap_liq_exchange, &
-       vap_ice_exchange,qv_prev,t_prev,col_location, &
+       vap_ice_exchange,qv_prev,t_prev,col_location &
 #ifdef SCREAM_CONFIG_IS_CMAKE
        ,elapsed_s &
 #endif
@@ -1167,7 +1167,7 @@ contains
     real(rtype), intent(inout), dimension(its:ite,kts:kte)      :: bm      ! ice, rime volume mixing ratio    m3 kg-1
 
     real(rtype), intent(inout), dimension(its:ite,kts:kte)      :: qv         ! water vapor mixing ratio         kg kg-1
-    real(rtype), intent(inout), dimension(its:iqite,kts:kte)      :: th_atm         ! potential temperature            K
+    real(rtype), intent(inout), dimension(its:ite,kts:kte)      :: th_atm         ! potential temperature            K
     real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: pres       ! pressure                         Pa
     real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: dz        ! vertical grid spacing            m
     real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: nc_nuceat_tend      ! IN ccn activated number tendency kg-1 s-1
@@ -1360,7 +1360,7 @@ contains
        call p3_main_part1(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, dt, &
             pres(i,:), dpres(i,:), dz(i,:), nc_nuceat_tend(i,:), nccn_prescribed(i,:), inv_exner(i,:), exner(i,:), &
             inv_cld_frac_l(i,:), inv_cld_frac_i(i,:), inv_cld_frac_r(i,:), latent_heat_vapor(i,:), latent_heat_sublim(i,:), latent_heat_fusion(i,:), &
-            t_atm(i,:), rho(i,:), inv_rho(i,:), qv_sat_l(i,:), qv_sat_i(i,:), qv_supersat_i(i,:), rhofacr(i,:), &
+            t_atm(i,:), rho(i,:), inv_rho(i,:), qv_sat_l(i,:), qv_sat_i(i,:), qv_supersat_l(i,:), qv_supersat_i(i,:), rhofacr(i,:), &! added qv_supersat_l for ice_nucleation -ST
             rhofaci(i,:), acn(i,:), qv(i,:), th_atm(i,:), qc(i,:), nc(i,:), qr(i,:), nr(i,:), &
             qi(i,:), ni(i,:), qm(i,:), bm(i,:), qc_incld(i,:), qr_incld(i,:), &
             qi_incld(i,:), qm_incld(i,:), nc_incld(i,:), nr_incld(i,:), &
@@ -2627,7 +2627,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
        print*, "nnuc in ice_nucleation, do_new_lp_freezing:", do_new_lp_freezing
        nnuc0_flag = .false.
    endif
-   print*, "in nnuc stage", do_new_lp_freezing
+   ! print*, "in nnuc stage", do_new_lp_freezing
    ! choose default of bg_freezing 
    if ( do_new_lp_freezing .eq. .false. ) then
       ! default freezing from SCREAM
@@ -3650,6 +3650,8 @@ qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
    real(rtype), intent(out) :: qc2qi_berg_tend
 
    real(rtype) :: qi_tend
+   real(rtype) :: factor_small = 2., factor_large = 1. ! factor_small is for scaling the vapor deposition for ice of small particle mass
+   real(rtype) :: temp_xx, scaling_factor, epi_over_abi_mod ! added per HM's suggestion with code from PB
 
    !INITIALIZE EVERYTHING TO 0.
    qc2qi_berg_tend = 0._rtype
@@ -3660,10 +3662,20 @@ qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
    !NO ICE => NO DEPOS/SUBLIM SO SKIP ALL CALCULATIONS
    if (qi_incld>qsmall) then
 
+      ! define a variable (temp_xx) that takes on a value of zero when the mass radius is >=35 microns
+      !    and one when the mass radius is <= 25 microns.  Linear in between in terms of ice mass
+      temp_xx = MAX(0., MIN(1., (mi35*ni_incld - qi_incld) / (mi35*ni_incld - mi25*ni_incld) ) ) 
+
+      ! convert this to a size-dependent scaling factor, which takes on a value of scaling_large
+      !   for mass radius >= 35 microns and scaling_small for mass radius <=25 microns.
+      scaling factor = scaling_large + (scaling_small - scaling_large) * temp_xx
+
+      ! modify the deposition coefficient epsi/abi by this scaling factor
+      epsi_over_abi_mod = scaling_factor*epsi/abi
       !USING MIN IN THE LINE BELOW TO PREVENT SUBLIM OR DEPOS FROM PUSHING qv BEYOND qv_sat_i
       !WITHIN THE GIVEN TIMESTEP. APPLYING MIN HERE IS EQUIVALENT TO LIMITING THE
       !TENDENCY LATER TO ENSURE END-OF-STEP QV ISN'T INAPPROPRIATELY SUPER OR SUBSATURATED.
-      qi_tend = min(epsi/abi,inv_dt) * (qv - qv_sat_i)
+      qi_tend = min(epsi_over_abi_mod, inv_dt) * (qv - qv_sat_i)
       
       !SUBLIMATION:
       if (qi_tend<0._rtype) then
@@ -3687,7 +3699,7 @@ qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
          end if
 
          !BERGERON
-         qc2qi_berg_tend = max(epsi/abi*(qv_sat_l - qv_sat_i), 0._rtype)
+         qc2qi_berg_tend = max(epsi_over_abi_mod*(qv_sat_l - qv_sat_i), 0._rtype)
 
       end if !T<freezing
    end if !qi_incld>qsmall

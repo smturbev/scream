@@ -20,7 +20,7 @@ module micro_p3_utils
 
     real(rtype) :: latent_heat_vapor, latent_heat_sublim, latent_heat_fusion
 
-    real(rtype),public :: rho_1000mb,rho_600mb,ar,br,f1r,f2r,ecr,rho_h2o,kr,kc,aimm,bimm,rin,mi0,nccnst,  &
+    real(rtype),public :: rho_1000mb,rho_600mb,ar,br,f1r,f2r,ecr,rho_h2o,kr,kc,aimm,bimm,rin,mi0,mi25,mi35,nccnst,  &
        eci,eri,bcn,cpw,cons1,cons2,cons3,cons4,cons5,cons6,cons7,         &
        inv_rho_h2o,inv_dropmass,cp,g,rd,rv,ep_2,inv_cp,   &
        thrd,sxth,piov3,piov6,rho_rimeMin,     &
@@ -42,7 +42,15 @@ module micro_p3_utils
     logical, public :: do_new_lp_frz =  .true. ! new ice nucleation from BG; if false, do standard ice nucleation
     logical, public :: no_cirrus_mohler_ice_nucleation=.false. !no Mohler et al. heterogeneous freezing on "dust" at T<-35°C
     logical, public :: no_lphom_ice_nucleation=.false. !no Liu-Penner Hom freezing
-    
+    ! ice nucleation nsulf and ndust
+    real,public :: NumCirrusSulf = 20. !20 will effectively limit the ice nucleation for one event to 20 k /L: better limit, as no way to deplete air mass of nsulf in this code
+                            !100. !100/cm3 
+                            !BG max number of sulphate aerosol used for homog freezing -> taken some reasonable value for upper troposphere
+                            !used this number as Liu and Penner, 2005
+    real,public ::  NumCirrusINP = 2.e-3 !in units per cm3! BG added some reasonable background upper tropospheric dust/het ice nuclei value for cirrus conditions
+                              !BG: based on simulated upper tropospheric (200 hPa) values of dust in Tropical Western Pacific for ECHAM-HAM GCM simulations
+
+
     real(rtype),public :: pi_e3sm
     ! ice microphysics lookup table array dimensions
     integer, public,parameter :: isize        = 50
@@ -165,6 +173,9 @@ module micro_p3_utils
     aimm   = 0.65_rtype
     rin    = 0.1e-6_rtype
     mi0    = 4._rtype*piov3*900._rtype*1.e-18_rtype
+    ! added mi25/35 for scaling vapor deposition by ice mass radius -ST
+    mi25    = 4._rtype*piov3*900._rtype*(25.e-6_rtype)**3._rtype
+    mi35    = 4._rtype*piov3*900._rtype*(35.e-6_rtype)**3._rtype
 
     eci    = 0.5_rtype
     eri    = 1._rtype
