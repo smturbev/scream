@@ -38,10 +38,6 @@ module micro_p3_utils
     real(rtype),public :: T_homogfrz ! Homogeneous freezing temperature, -40C  ~K
     real(rtype),public :: T_icenuc   ! Ice nucleation temperature, -5C ~K
     
-    ! ice microphysics processes on/off -added by ST June 2023
-    logical, public :: do_new_lp_frz =  .true. ! new ice nucleation from BG; if false, do standard ice nucleation
-    logical, public :: no_cirrus_mohler_ice_nucleation=.false. !no Mohler et al. heterogeneous freezing on "dust" at T<-35°C
-    logical, public :: no_lphom_ice_nucleation=.false. !no Liu-Penner Hom freezing
     ! ice nucleation nsulf and ndust
     real,public :: NumCirrusSulf = 20. !20 will effectively limit the ice nucleation for one event to 20 k /L: better limit, as no way to deplete air mass of nsulf in this code
                             !100. !100/cm3 
