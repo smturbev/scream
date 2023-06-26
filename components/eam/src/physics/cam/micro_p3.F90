@@ -465,6 +465,7 @@ contains
   END SUBROUTINE p3_main_part1
 
   SUBROUTINE p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
+       dep_scaling_small, & ! added for ice_deposition_sublimation -ST
        do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, dt, inv_dt, & ! ST - added new_lp, cirrus_mohler, lphom
        pres, inv_exner, inv_cld_frac_l, inv_cld_frac_i, inv_cld_frac_r, ni_activated, &
        inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl, & ! ST - added uzpl (vertical velocity)
@@ -480,7 +481,7 @@ contains
 
     integer, intent(in) :: kts, kte, kbot, ktop, kdir
     logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN, do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation
-    real(rtype), intent(in) :: dt, inv_dt
+    real(rtype), intent(in) :: dt, inv_dt, dep_scaling_small
 
     real(rtype), intent(in), dimension(kts:kte) :: pres, inv_exner, inv_cld_frac_l,  &
          inv_cld_frac_i, inv_cld_frac_r, ni_activated, inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl
@@ -1378,6 +1379,7 @@ contains
        if (.not. (is_nucleat_possible .or. is_hydromet_present)) goto 333
 
        call p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
+            dep_scaling_small, &
             do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, dt, inv_dt, &
             pres(i,:), inv_exner(i,:), &
             inv_cld_frac_l(i,:), inv_cld_frac_i(i,:), inv_cld_frac_r(i,:), ni_activated(i,:), inv_qc_relvar(i,:), &
