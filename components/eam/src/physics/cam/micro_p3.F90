@@ -306,7 +306,7 @@ contains
              amg = piov6*997._rtype*dia**3           ! mass [kg]
              amg = amg*1000._rtype                   ! convert [kg] to [g]
 
-             !get fallspeed as a function of size [m s-1]
+             ! get fallspeed as a function of size [m s-1]
              if (dia*1.e+6_rtype.le.134.43_rtype)      then
                 vt = 4.5795e+3_rtype*amg**(2._rtype*thrd)
              elseif (dia*1.e+6_rtype.lt.1511.64_rtype) then
@@ -317,7 +317,7 @@ contains
                 vt = 9.17_rtype
              endif
 
-             !note: factor of 4.*mu_r is non-answer changing and only needed to
+             ! note: factor of 4.*mu_r is non-answer changing and only needed to
              !      prevent underflow/overflow errors, same with 3.*mu_r for dum5
              dum1 = dum1 + vt*10._rtype**(mu_r*log10(dia)+4._rtype*mu_r)*exp(-lamr*dia)*dd*1.e-6_rtype
              dum2 = dum2 + 10._rtype**(mu_r*log10(dia)+4._rtype*mu_r)*exp(-lamr*dia)*dd*1.e-6_rtype
@@ -1129,7 +1129,7 @@ contains
 
   SUBROUTINE p3_main(qc,nc,qr,nr,th_atm,qv,dt,qi,qm,ni,bm,   &
        pres,dz,nc_nuceat_tend,nccn_prescribed,ni_activated,inv_qc_relvar,it,precip_liq_surf,precip_ice_surf,its,ite,kts,kte,diag_eff_radius_qc,     &
-       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, dep_scaling_small, do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, uzpl, &
+       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, dep_scaling_small, sed_scaling_small, do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, uzpl, &
        dpres,inv_exner,qv2qi_depos_tend,precip_total_tend,nevapr,qr_evap_tend,precip_liq_flux,precip_ice_flux,cld_frac_r,cld_frac_l,cld_frac_i,  &
        p3_tend_out,mu_c,lamc,liq_ice_exchange,vap_liq_exchange, &
        vap_ice_exchange,qv_prev,t_prev,col_location &
@@ -1140,12 +1140,12 @@ contains
 
     !----------------------------------------------------------------------------------------!
     !                                                                                        !
-    ! This is the main subroutine for the P3 microphysics scheme.  It is called from the     !
-    ! wrapper subroutine ('MP_P3_WRAPPER') and is passed i,k slabs of all prognostic         !
-    ! variables -- hydrometeor fields, potential temperature, and water vapor mixing ratio.  !
-    ! Microphysical process rates are computed first.  These tendencies are then used to     !
-    ! computed updated values of the prognostic variables.  The hydrometeor variables are    !
-    ! then updated further due to sedimentation.                                             !
+    ! This is the main subroutine for the P3 microphysics scheme. It is called from the      !
+    ! wrapper subroutine ('MP_P3_WRAPPER' --> 'micro_p3_interface') and is passed i,k slabs  !
+    ! of all prognostic variables -- hydrometeor fields, potential temperature, and water    !
+    ! vapor mixing ratio. Microphysical process rates are computed first. These tendencies   !
+    ! are then used to computed updated values of the prognostic variables. The hydrometeor  !
+    ! variables are then updated further due to sedimentation.                                             !
     !                                                                                        !
     ! Several diagnostic values are also computed and returned to the wrapper subroutine,    !
     ! including precipitation rates.                                                         !
@@ -1208,8 +1208,10 @@ contains
     logical(btype), intent(in)                                  :: do_prescribed_CCN
     logical(btype), intent(in)         :: do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation
     
-    ! INPUT for scaling factor in ice vapor deposition -ST
+    ! INPUT for scaling factor in ice vapor deposition & sedimentation -ST
+    ! set in micro_p3_interface.F90
     real(rtype), intent(in)            :: dep_scaling_small ! scaling factor for small ice mass, typically 0.5, 1 (no scaling), or 2
+    real(rtype), intent(in)            :: sed_scaling_small ! scaling factor for small ice mass, typically 0.5, 1 (no scaling), or 2 
 
     ! INPUT needed for PBUF variables used by other parameterizations
 
@@ -1448,6 +1450,7 @@ contains
 
        call ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
          rho(i,:),inv_rho(i,:),rhofaci(i,:),cld_frac_i(i,:),inv_dz(i,:),dt,inv_dt, &
+         sed_scaling_small, &
          qi(i,:),qi_incld(i,:),ni(i,:),qm(i,:),qm_incld(i,:),bm(i,:),bm_incld(i,:),ni_incld(i,:), &
          precip_ice_surf(i),p3_tend_out(i,:,40),p3_tend_out(i,:,41))
 
@@ -2636,7 +2639,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    ! choose default of bg_freezing 
    if ( do_new_lp_freezing .eq. .false. ) then
       ! default freezing from SCREAM
-      print*, "in default scheme", do_new_lp_freezing
+      ! print*, "in default scheme", do_new_lp_freezing
       if ( t_atm .lt.T_icenuc .and. qv_supersat_i.ge.0.05_rtype) then
          if(.not. do_predict_nc .or. do_prescribed_CCN) then
             dum = 0.005_rtype*exp(0.304_rtype*(T_zerodegc-t_atm))*1000._rtype*inv_rho ! Cooper 1986
@@ -2680,7 +2683,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
       !BG added a qc>qsmall condition: based on recent findings, deposition freezing is negligible in mixed phase (e.g. Ansmann et al., 2018)
       tc= t_atm-T_zerodegc ! convert K to degC
       ! --------------------------------------------------------
-      print*, "in new freezing scheme", do_new_lp_freezing
+      ! print*, "in new freezing scheme", do_new_lp_freezing
       if ( ( (t_atm.lt.258.15_rtype) .and. (t_atm .ge. 236.15_rtype) &
       .and. (qv_supersat_i.ge.0.05_rtype) .and. (qc .gt. qsmall) ) .or. &
       ( (t_atm.lt.241.15_rtype) .and. (t_atm .ge. 236.15_rtype) .and. &
@@ -4292,6 +4295,7 @@ end subroutine compute_rain_fall_velocity
 
 subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
    rho,inv_rho,rhofaci,cld_frac_i,inv_dz,dt,inv_dt,  &
+   sed_scaling_small, &
    qi,qi_incld,ni,qm,qm_incld,bm,bm_incld,ni_incld,precip_ice_surf,qi_tend,ni_tend)
 
    implicit none
@@ -4305,6 +4309,7 @@ subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
    real(rtype), intent(in), dimension(kts:kte) :: inv_dz
    real(rtype), intent(in) :: dt
    real(rtype), intent(in) :: inv_dt
+   real(rtype), intent(in) :: sed_scaling_small
 
    real(rtype), intent(inout), dimension(kts:kte), target :: qi
    real(rtype), intent(inout), dimension(kts:kte) :: qi_incld
@@ -4342,6 +4347,8 @@ subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
 
    real(rtype) :: dum1, dum4, dum5, dum6
    integer dumi, dumii, dumjj, dumzz
+   real(rtype) :: scaling_small = sed_scaling_small, scaling_large = 1. ! added for sensitiviy study -ST
+   real(rtype) :: temp_xx, scaling_factor                               ! added for sensitiviy study -ST
 
    log_qxpresent = .false.  !note: this applies to ice category 'iice' only
    k_qxtop       = kbot
@@ -4358,7 +4365,14 @@ subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
    qnr(2)%p => ni
    qnr(3)%p => qm
    qnr(4)%p => bm
-
+   
+   ! define a variable (temp_xx) that takes on a value of zero when the mass radius is >=35 microns
+   !    and one when the mass radius is <= 25 microns.  Linear in between in terms of ice mass
+   temp_xx = MAX(0., MIN(1., (mi35*ni_incld - qi_incld) / (mi35*ni_incld - mi25*ni_incld) ) )
+   ! convert this to a size-dependent scaling factor, which takes on a value of scaling_large
+   !   for mass radius >= 35 microns and scaling_small for mass radius <=25 microns.
+   scaling_factor = scaling_large + (scaling_small - scaling_large) * temp_xx
+   
    !find top, determine qxpresent
    do k = ktop,kbot,-kdir
       if (qi(k).ge.qsmall) then
@@ -4414,8 +4428,8 @@ subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
                ni(k) = ni_incld(k)*cld_frac_i(k)
                !zitot(i,k) = min(zitot(i,k),table_val_qi_fallspd0)  !adjust Zi if needed to make sure mu_i is in bounds
                !zitot(i,k) = max(zitot(i,k),table_val_qi_fallspd1)
-               V_qit(k) = table_val_qi_fallspd*rhofaci(k)     !mass-weighted  fall speed (with density factor)
-               V_nit(k) = table_val_ni_fallspd*rhofaci(k)     !number-weighted    fall speed (with density factor)
+               V_qit(k) = table_val_qi_fallspd*rhofaci(k)*scaling_factor     !mass-weighted   fall speed (with density factor) !scaling factor for sensitivity study -ST
+               V_nit(k) = table_val_ni_fallspd*rhofaci(k)*scaling_factor     !number-weighted fall speed (with density factor) !scaling factor for sensitivity study -ST
                !==
 
             endif qi_notsmall_i1
@@ -4427,9 +4441,9 @@ subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
          call generalized_sedimentation(kts, kte, kdir, k_qxtop, k_qxbot, kbot, Co_max, &
               dt_left, prt_accum, inv_dz, inv_rho, rho, num_arrays, vs, fluxes, qnr)
 
-         !update _incld variables
-         !Note that cld_frac_i is set in interface to have min of mincld=1e-4
-         !so dividing by it is fine.
+         ! update _incld variables
+         ! Note that cld_frac_i is set in interface to have min of mincld=1e-4
+         ! so dividing by it is fine.
          qi_incld(:) = qi(:)/cld_frac_i(:)
          ni_incld(:) = ni(:)/cld_frac_i(:)
          qm_incld(:) = qm(:)/cld_frac_i(:)

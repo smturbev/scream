@@ -855,7 +855,8 @@ end subroutine micro_p3_readnl
     real(rtype) :: cdnumc(pcols)
     real(rtype) :: icinc(pcols,pver)
     real(rtype) :: icwnc(pcols,pver)
-    real(rtype) :: dep_scaling_small=1._rtype
+    real(rtype) :: dep_scaling_small=2._rtype
+    real(rtype) :: sed_scaling_small=1._rtype
 
 
     integer :: it                      !timestep counter                       -
@@ -865,7 +866,7 @@ end subroutine micro_p3_readnl
 
     logical :: do_predict_nc           !prognostic droplet concentration or not?
     logical :: do_subgrid_clouds       !use subgrid cloudiness in tendency calculations?
-    logical :: do_new_lp_freezing=.true., no_cirrus_mohler_ice_nucleation=.false., no_lphom_ice_nucleation=.false.
+    logical :: do_new_lp_freezing=.false., no_cirrus_mohler_ice_nucleation=.false., no_lphom_ice_nucleation=.false.
     integer :: icol, ncol, k
     integer :: psetcols, lchnk
     integer :: itim_old
@@ -1115,6 +1116,7 @@ end subroutine micro_p3_readnl
          do_predict_nc,               & ! IN     .true.=prognostic Nc, .false.=specified Nc
          do_prescribed_CCN,           & ! IN
          dep_scaling_small,           & ! IN     scaling factor for vapor deposition on small ice particles
+         sed_scaling_small,           & ! IN     scaling factor for ice sedimentation on small ice particles
          do_new_lp_freezing,          & ! IN     .true.=new ice nuc., .false.=standard p3 ice nuc
          no_cirrus_mohler_ice_nucleation, & ! IN .true.=no cirrus mohler, .false.=cirrus mohler active
          no_lphom_ice_nucleation,     & ! IN     .true.=no hom frz via LP2005, .false.=hom frz active
