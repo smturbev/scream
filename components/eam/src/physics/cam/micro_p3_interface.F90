@@ -855,7 +855,7 @@ end subroutine micro_p3_readnl
     real(rtype) :: cdnumc(pcols)
     real(rtype) :: icinc(pcols,pver)
     real(rtype) :: icwnc(pcols,pver)
-    real(rtype) :: dep_scaling_small=2._rtype
+    real(rtype) :: dep_scaling_small=1._rtype
     real(rtype) :: sed_scaling_small=1._rtype
 
 
@@ -1120,14 +1120,14 @@ end subroutine micro_p3_readnl
          do_new_lp_freezing,          & ! IN     .true.=new ice nuc., .false.=standard p3 ice nuc
          no_cirrus_mohler_ice_nucleation, & ! IN .true.=no cirrus mohler, .false.=cirrus mohler active
          no_lphom_ice_nucleation,     & ! IN     .true.=no hom frz via LP2005, .false.=hom frz active
-         uzpl(its:ite,kts:kte),       & ! IN  vertical veloctiy, omega            Pa/s
+         state%omega(its:ite,kts:kte),& ! IN  vertical veloctiy, omega            Pa/s
          ! AaronDonahue new stuff
          state%pdeldry(its:ite,kts:kte),  & ! IN pressure level thickness for computing total mass
          inv_exner(its:ite,kts:kte),      & ! IN exner values
          qv2qi_depos_tend(its:ite,kts:kte),    & ! OUT Deposition/sublimation rate of cloud ice
          precip_total_tend(its:ite,kts:kte),      & ! OUT Total precipitation (rain + snow)
          nevapr(its:ite,kts:kte),     & ! OUT evaporation of total precipitation (rain + snow)
-         qr_evap_tend(its:ite,kts:kte),  & ! OUT rain evaporation
+         qr_evap_tend(its:ite,kts:kte),   & ! OUT rain evaporation
          precip_liq_flux(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2s^-1) pverp
          precip_ice_flux(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp
          cld_frac_r(its:ite,kts:kte),      & ! IN rain cloud fraction
