@@ -465,7 +465,7 @@ contains
   END SUBROUTINE p3_main_part1
 
   SUBROUTINE p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
-       dep_scaling_small, & ! added for ice_deposition_sublimation -ST
+       dep_scaling_small, & ! added for ice_deposition_sublimation -ST 
        do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, dt, inv_dt, & ! ST - added new_lp, cirrus_mohler, lphom
        pres, inv_exner, inv_cld_frac_l, inv_cld_frac_i, inv_cld_frac_r, ni_activated, &
        inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl, & ! ST - added uzpl (vertical velocity)
@@ -4347,8 +4347,8 @@ subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
 
    real(rtype) :: dum1, dum4, dum5, dum6
    integer dumi, dumii, dumjj, dumzz
-   real(rtype) :: scaling_small = sed_scaling_small, scaling_large = 1. ! added for sensitiviy study -ST
-   real(rtype) :: temp_xx, scaling_factor                               ! added for sensitiviy study -ST
+   real(rtype) :: sed_scaling_large = 1._rtype ! added for sensitiviy study -ST
+   real(rtype) :: temp_xx, scaling_factor                                     ! added for sensitiviy study -ST
 
    log_qxpresent = .false.  !note: this applies to ice category 'iice' only
    k_qxtop       = kbot
@@ -4365,13 +4365,6 @@ subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
    qnr(2)%p => ni
    qnr(3)%p => qm
    qnr(4)%p => bm
-   
-   ! define a variable (temp_xx) that takes on a value of zero when the mass radius is >=35 microns
-   !    and one when the mass radius is <= 25 microns.  Linear in between in terms of ice mass
-   temp_xx = MAX(0., MIN(1., (mi35*ni_incld - qi_incld) / (mi35*ni_incld - mi25*ni_incld) ) )
-   ! convert this to a size-dependent scaling factor, which takes on a value of scaling_large
-   !   for mass radius >= 35 microns and scaling_small for mass radius <=25 microns.
-   scaling_factor = scaling_large + (scaling_small - scaling_large) * temp_xx
    
    !find top, determine qxpresent
    do k = ktop,kbot,-kdir
@@ -4428,6 +4421,15 @@ subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
                ni(k) = ni_incld(k)*cld_frac_i(k)
                !zitot(i,k) = min(zitot(i,k),table_val_qi_fallspd0)  !adjust Zi if needed to make sure mu_i is in bounds
                !zitot(i,k) = max(zitot(i,k),table_val_qi_fallspd1)
+               
+               ! define a variable (temp_xx) that takes on a value of zero when the mass radius is >=35 microns
+               !    and one when the mass radius is <= 25 microns.  Linear in between in terms of ice mass
+               temp_xx = MAX(0., MIN(1., (mi35*ni_incld(k) - qi_incld(k)) / (mi35*ni_incld(k) - mi25*ni_incld(k)) ) ) 
+
+               ! convert this to a size-dependent scaling factor, which takes on a value of scaling_large
+               !   for mass radius >= 35 microns and scaling_small for mass radius <=25 microns.
+               scaling_factor = sed_scaling_large + (sed_scaling_small - sed_scaling_large) * temp_xx
+   
                V_qit(k) = table_val_qi_fallspd*rhofaci(k)*scaling_factor     !mass-weighted   fall speed (with density factor) !scaling factor for sensitivity study -ST
                V_nit(k) = table_val_ni_fallspd*rhofaci(k)*scaling_factor     !number-weighted fall speed (with density factor) !scaling factor for sensitivity study -ST
                !==
