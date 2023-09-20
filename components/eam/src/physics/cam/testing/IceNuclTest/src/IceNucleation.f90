@@ -31,7 +31,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    qc, uzpl, & ! added for new ice freezing from BG
    do_predict_nc, do_prescribed_CCN,   & ! old 
    do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation,  & ! added for new ice freezing from BG ! TODO: add use_preexisting_ice
-   qinuc, ni_nucleat_tend, nnuc1,nnuc2,nnuc3,nnuc4)
+   qinuc, ni_nucleat_tend,nnuc0,nnuc1,nnuc2,nnuc3,nnuc4)
 
    !................................................................
    ! deposition/condensation-freezing nucleation
@@ -55,7 +55,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
 
    real(rtype), intent(inout) :: qinuc
    real(rtype), intent(inout) :: ni_nucleat_tend
-   real(rtype), intent(out) :: nnuc1, nnuc2, nnuc3, nnuc4 ! separate into categories based on pathway of nucleation
+   real(rtype), intent(out) :: nnuc0, nnuc1, nnuc2, nnuc3, nnuc4 ! separate into categories based on pathway of nucleation
 
    ! local variables
    real(rtype) :: dum, N_nuc, Q_nuc
@@ -85,6 +85,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
             dum = 0.005_rtype*exp(0.304_rtype*(T_zerodegc-t_atm))*1000._rtype*inv_rho ! Cooper 1986
             dum = min(dum,100000._rtype*inv_rho)
             N_nuc = max(0._rtype,(dum-ni)*inv_dt)
+            nnuc0=N_nuc
             if (N_nuc.ge.1.e-20_rtype) then
                Q_nuc = max(0._rtype,(dum-ni)*mi0*inv_dt)
                qinuc = Q_nuc
@@ -93,8 +94,11 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
          else
             ! Ice nucleation predicted by aerosol scheme
             ni_nucleat_tend = max(0._rtype, (ni_activated - ni)*inv_dt)
+            nnuc0=ni_nucleat_tend
             qinuc = ni_nucleat_tend * mi0
          endif
+      else
+          nnuc0=0._rtype
       endif
    else ! do_new_lp_freezing .eq. .true.
       ! Adding four main components:

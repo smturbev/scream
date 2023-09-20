@@ -11,7 +11,7 @@ program TestIceNucleation
   real(rtype) :: qinuc, ni_nucleat_tend
   logical(btype) :: do_predict_nc, do_prescribed_CCN, do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation
   real(rtype) :: qq, nnuc
-  real(rtype) :: nn1,nn2,nn3,nn4
+  real(rtype) :: nn0,nn1,nn2,nn3,nn4
 
   inv_rho = 1.
   ni = 0.
@@ -20,11 +20,11 @@ program TestIceNucleation
   ! qv_supersat_l = -0.2 ! RHw = 0.8
   do_predict_nc = .false.
   do_prescribed_CCN = .false.
-  do_new_lp_freezing = .true.
+  do_new_lp_freezing = .false.
   no_cirrus_mohler_ice_nucleation = .false.
-  no_lphom_ice_nucleation = .true.
+  no_lphom_ice_nucleation = .false.
     
-  do m = 1,8 ! loop over S_liq
+  do m = 1,6 ! loop over S_liq
     qv_supersat_l = -0.3 + 0.1*real(m-1)
     do l = 1,4,3 ! loop over vertical velocity, uzpl (m/s)
       uzpl = 0.5*real(l)
@@ -47,14 +47,19 @@ program TestIceNucleation
              do_predict_nc,do_prescribed_CCN,&
              do_new_lp_freezing,no_cirrus_mohler_ice_nucleation,&
              no_lphom_ice_nucleation,qinuc,ni_nucleat_tend,&
-             nn1,nn2,nn3,nn4)
+             nn0,nn1,nn2,nn3,nn4)
 
             qq = qinuc/inv_dt
             nnuc = ni_nucleat_tend/inv_dt
+            nn0=nn0/inv_dt
+            nn1=nn1/inv_dt
+            nn2=nn2/inv_dt
+            nn3=nn3/inv_dt
+            nn4=nn4/inv_dt
 
-            if(i+j+l+k+m.eq.5) write(*,*) 'w  qc  T  Sice  Sliq  Nnuc_old  qnuc_old  nnuc1  nnuc2  nnuc3  nnuc4'
-            write(*,992) uzpl, qc, t_atm, qv_supersat_i, qv_supersat_l, nnuc, qq, nn1, nn2, nn3, nn4
-992 format(6f14.3, 1e14.4, 4f14.2)
+            if(i+j+l+k+m.eq.5) write(*,*) 'w  qc  T  Sice  Sliq  Nnuc_old  qnuc_old  nnuc0  nnuc1  nnuc2  nnuc3  nnuc4'
+            write(*,992) uzpl, qc, t_atm, qv_supersat_i, qv_supersat_l, nnuc, qq, nn0, nn1, nn2, nn3, nn4
+992 format(6f14.3, 1e14.4, 5f14.2)
           end do
         end do
       end do
