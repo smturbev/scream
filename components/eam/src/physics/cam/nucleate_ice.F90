@@ -31,7 +31,6 @@ module nucleate_ice
 
 use wv_saturation,  only: svp_water, svp_ice
 use cam_logfile,    only: iulog
-use phys_control,   only: cam_chempkg_is 
 
 implicit none
 private
@@ -98,12 +97,9 @@ end subroutine nucleati_init
 subroutine nucleati(  &
    wbar, tair, pmid, relhum, cldn,      &
    qc, qi, ni_in, rhoair,               &
-   so4_num, dst_num, soot_num,          &
-   dst1_sfc_to_num, dst3_sfc_to_num,    &
+   so4_num, dst_num,                    &
    nuci, onihf, oniimm, onidep, onimey, &
-   wpice, weff, fhom,                   &
-   dst1_num,dst2_num,dst3_num,dst4_num, &
-   organic_num, clim_modal_aero )
+   wpice, weff, fhom )
 
    !---------------------------------------------------------------
    ! Purpose:
@@ -112,9 +108,10 @@ subroutine nucleati(  &
    ! Method: The current method is based on Liu & Penner (2005)
    !  It related the ice nucleation with the aerosol number, temperature and the
    !  updraft velocity. It includes homogeneous freezing of sulfate, immersion
-   !  freezing of soot, and Meyers et al. (1992) deposition nucleation
+   !  freezing of dust, and Meyers et al. (1992) deposition nucleation
    !
-   ! Authors: Xiaohong Liu, 01/2005, modifications by A. Gettelman 2009-2010
+   ! Authors: Xiaohong Liu, 01/2005, modifications by A. Gettelman 2009-2010,
+   !  modifications by S. Turbeville 2023
    !----------------------------------------------------------------
 
    ! Input Arguments
@@ -129,24 +126,18 @@ subroutine nucleati(  &
    real(r8), intent(in) :: rhoair      ! air density (kg/m3)
    real(r8), intent(in) :: so4_num     ! so4 aerosol number (#/cm^3)
    real(r8), intent(in) :: dst_num     ! total dust aerosol number (#/cm^3)
-   real(r8), intent(in) :: soot_num    ! soot (hydrophilic) aerosol number (#/cm^3)
-   real(r8), intent(in) :: dst1_num     ! dust aerosol number (#/cm^3)
-   real(r8), intent(in) :: dst2_num     ! dust aerosol number (#/cm^3)
-   real(r8), intent(in) :: dst3_num     ! dust aerosol number (#/cm^3)
-   real(r8), intent(in) :: dst4_num     ! dust aerosol number (#/cm^3)
-   real(r8), intent(in) :: dst1_sfc_to_num
-   real(r8), intent(in) :: dst3_sfc_to_num
-   real(r8), intent(in) :: organic_num  !organic aerosol number (primary carbon) (#/cm^3)
-   logical,  intent(in) :: clim_modal_aero !whether MAM is used or not
-
+   
    ! Output Arguments
    real(r8), intent(out) :: nuci       ! ice number nucleated (#/kg)
    real(r8), intent(out) :: onihf      ! nucleated number from homogeneous freezing of so4
    real(r8), intent(out) :: oniimm     ! nucleated number from immersion freezing
    real(r8), intent(out) :: onidep     ! nucleated number from deposition nucleation
-   real(r8), intent(out) :: onimey     ! nucleated number from deposition nucleation  (meyers: mixed phase)
-   real(r8), intent(out) :: wpice      ! diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at Shom
-   real(r8), intent(out) :: weff       ! effective Vertical velocity for ice nucleation (m/s); weff=wbar-wpice
+   real(r8), intent(out) :: onimey     ! nucleated number from deposition nucleation  
+                                       !   (meyers: mixed phase)
+   real(r8), intent(out) :: wpice      ! diagnosed Vertical velocity Reduction caused by 
+                                       !   preexisting ice (m/s), at Shom
+   real(r8), intent(out) :: weff       ! effective Vertical velocity for ice nucleation (m/s);
+                                       !   weff=wbar-wpice
    real(r8), intent(out) :: fhom       ! how much fraction of cloud can reach Shom
 
    ! Local workspace
@@ -158,16 +149,7 @@ subroutine nucleati(  &
    real(r8) :: tc, A, B, regm            ! work variable
    real(r8) :: esl, esi, deles           ! work variable
 
-   !(09/29/2014)DeMott for mixed-phase cloud ice nucleation 
-   real(r8)  :: na500, na500_1                            ! aerosol number with D>500 nm (#/cm^3)
-   real(r8)  :: na500stp                                  ! aerosol number with D>500 nm (#/cm^3) at STP
-   real(r8)  :: nimeystp                                  ! nucleated number from ice nucleation (meyers) at STP
-   real(r8)  :: ad, bd   
    real(r8)  :: wbar1, wbar2
-
-   ! Niemand et al. for mixed-phase cloud immersion ice nucleation (surface area based, dust)
-   real(r8)  :: an
-   real(r8)  :: ns_dust_imm    ! dust active site surface densities from AIDA experiments (m-2)
 
    ! used in SUBROUTINE Vpreice
    real(r8) :: Ni_preice        ! cloud ice number conc (1/m3)   
@@ -226,7 +208,8 @@ subroutine nucleati(  &
    deles = 0._r8
    esi   = 0._r8
 
-   if(so4_num >= 1.0e-10_r8 .and. (soot_num+dst3_num) >= 1.0e-10_r8 .and. cldn > 0._r8) then
+   if(so4_num >= 1.0e-10_r8 .and. cldn > 0._r8) then  
+   ! so4_num = 20 /L is hardcoded in micro_p3_utils.f90
 
 #ifdef USE_XLIU_MOD
 !++ Mod from Xiaohong is the following two line conditional.
@@ -237,8 +220,8 @@ subroutine nucleati(  &
       if((tc.le.-35.0_r8) .and. ((relhum*svp_water(tair)/svp_ice(tair)*subgrid).ge.1.2_r8)) then ! use higher RHi threshold
 #endif
 
-            A = -1.4938_r8 * log(soot_num+dst3_num) + 12.884_r8
-            B = -10.41_r8  * log(soot_num+dst3_num) - 67.69_r8
+            A = -1.4938_r8 * log(dst_num) + 12.884_r8
+            B = -10.41_r8  * log(dst_num) - 67.69_r8
 
             regm = A * log(wbar1) + B
 
@@ -253,7 +236,7 @@ subroutine nucleati(  &
 
                   if (use_preexisting_ice) then
                      if (nihf.gt.1e-3_r8) then ! hom occur,  add preexisting ice
-                        niimm=min(dst3_num,Ni_preice*1e-6_r8)       ! assuming dst_num freeze firstly
+                        niimm=min(dst_num,Ni_preice*1e-6_r8)       ! assuming dst_num freeze firstly
                         nihf=nihf + Ni_preice*1e-6_r8 - niimm
                      endif
                      nihf=nihf*fhom
@@ -264,11 +247,11 @@ subroutine nucleati(  &
 
                else
 
-                  call hetero(tc,wbar2,soot_num+dst3_num,niimm,nidep)
+                  call hetero(tc,wbar2,dst_num,niimm,nidep)
                   if (use_preexisting_ice) then
                      if (niimm .gt. 1e-6_r8) then ! het freezing occur, add preexisting ice
                         niimm = niimm + Ni_preice*1e-6_r8
-                        niimm = min(dst3_num, niimm)        ! niimm < dst_num 
+                        niimm = min(dst_num, niimm)        ! niimm < dst_num 
                      end if
                   end if
                   nihf=0._r8
@@ -285,7 +268,7 @@ subroutine nucleati(  &
 
                if (use_preexisting_ice) then
                   if (nihf.gt.1e-3_r8) then !  hom occur,  add preexisting ice
-                     niimm=min(dst3_num,Ni_preice*1e-6_r8)       ! assuming dst_num freeze firstly
+                     niimm=min(dst_num,Ni_preice*1e-6_r8)       ! assuming dst_num freeze firstly
                      nihf=nihf + Ni_preice*1e-6_r8 - niimm
                   endif
                   nihf=nihf*fhom
@@ -305,7 +288,7 @@ subroutine nucleati(  &
 
                   if (use_preexisting_ice) then
                      if (nihf .gt. 1e-3_r8) then ! hom occur,  add preexisting ice
-                        niimm = min(dst3_num, Ni_preice*1e-6_r8)       ! assuming dst_num freeze firstly
+                        niimm = min(dst_num, Ni_preice*1e-6_r8)       ! assuming dst_num freeze firstly
                         nihf  = nihf + Ni_preice*1e-6_r8 - niimm
                      endif
                      nihf = nihf*fhom
@@ -317,7 +300,7 @@ subroutine nucleati(  &
                else
 
                   call hf(regm-5._r8,wbar1,relhum,so4_num,nihf)
-                  call hetero(regm,wbar2,soot_num+dst3_num,niimm,nidep)
+                  call hetero(regm,wbar2,dst_num,niimm,nidep)
 
                   if (use_preexisting_ice) then
                      nihf = nihf*fhom
@@ -332,7 +315,7 @@ subroutine nucleati(  &
                   if (use_preexisting_ice) then
                      if (n1 .gt. 1e-3_r8) then   ! add preexisting ice
                         n1    = n1 + Ni_preice*1e-6_r8
-                        niimm = min(dst3_num, n1)  ! assuming all dst_num freezing earlier than hom  !!
+                        niimm = min(dst_num, n1)  ! assuming all dst_num freezing earlier than hom  !!
                         nihf  = n1 - niimm
                      else
                         n1    = 0._r8
@@ -352,57 +335,14 @@ subroutine nucleati(  &
    end if
 #endif
 
-   if (use_dem_nucleate) then      ! DeMott, use particles number with D>0.5 um
-      !++iceMP
-
-      if(clim_modal_aero) then
-         if(cam_chempkg_is('trop_mam7') .or. cam_chempkg_is('trop_mam9')) then
-           na500_1  = dst1_num*0.566_r8
-         elseif(cam_chempkg_is('trop_mam3') .or. cam_chempkg_is('trop_mam4') .or. &
-              cam_chempkg_is('trop_mam4_resus') .or. cam_chempkg_is('trop_mam4_resus_soag')  .or. &
-              cam_chempkg_is('trop_mam4_mom') .or. cam_chempkg_is('trop_mam4_resus_mom') .or. &
-              cam_chempkg_is('linoz_mam3') .or. cam_chempkg_is('linoz_mam4_resus') .or. &
-              cam_chempkg_is('linoz_mam4_resus_soag') .or. cam_chempkg_is('linoz_mam4_resus_mom') .or. &
-              cam_chempkg_is('linoz_mam4_resus_mom_soag') .or. &
-              cam_chempkg_is('superfast_mam4_resus_mom_soag')) then !ASK Hailong about trop_mam4 
-            na500_1 = dst1_num*0.488_r8 + dst3_num
-         else
-            na500_1 = dst1_num*0.488_r8 + dst2_num + dst3_num + dst4_num   ! scaled for D>0.5-1 um from 0.1-1 um
-         endif
-      endif
-
-      ! prepare aerosol number and surface data for ice nucleation in mixed-phase clouds        
-      na500    = ( soot_num + organic_num ) * 0.0256_r8 + na500_1  ! scaled for D>0.5 um using Clarke et al., 1997; 2004; 2007: rg=0.1um, sig=1.6
-
-      na500stp = na500 * 101325._r8 * tair/( 273.15_r8 * pmid ) ! at STP      
-      ad  = 1.25
-      bd  = -0.46*tc-11.6
-
-   !--iceMP   
-   endif
-
-   if (use_nie_nucleate) then  ! Niemand et al., surface area based
-      an = -0.517*tc + 8.934
-   endif
 
    ! deposition/condensation nucleation in mixed clouds (-37<T<0C) (Meyers, 1992)
    if(tc.lt.0._r8 .and. tc.gt.-37._r8 .and. qc.gt.1.e-12_r8) then
-      if (use_dem_nucleate) then          ! use DeMott et al.         
-         !++iceMP
-         nimeystp = 1.e-3_r8 * 3.0_r8 * (na500stp**ad) * exp(bd)               ! cm^-3 
-         nimey=nimeystp*273.15_r8*pmid/(101325_r8*tair)
-      else if (use_nie_nucleate) then
-         ns_dust_imm = exp(an)          ! m^-2
-         nimey = dst1_num * (1._r8 - exp(-1.0_r8 * dst1_sfc_to_num * ns_dust_imm))&   ! cm^-3
-               + dst3_num * (1._r8 - exp(-1.0_r8 * dst3_sfc_to_num * ns_dust_imm))
-
-      else
          !--iceMP
          esl = svp_water(tair)     ! over water in mixed clouds
          esi = svp_ice(tair)     ! over ice
          deles = (esl - esi)
          nimey=1.e-3_r8*exp(12.96_r8*deles/esi - 0.639_r8) 
-      endif 
    else
       nimey=0._r8
    endif
@@ -475,7 +415,7 @@ subroutine hf(T,ww,RH,Na,Ni)
       real(r8)    RHw
 
 !---------------------------------------------------------------------
-! parameters
+! parameters from LP2005 table 1
 
       A1_fast  =0.0231_r8
       A21_fast =-1.6387_r8  !(T>-64 deg)
@@ -501,7 +441,7 @@ subroutine hf(T,ww,RH,Na,Ni)
       A = 6.0e-4_r8*log(ww)+6.6e-3_r8
       B = 6.0e-2_r8*log(ww)+1.052_r8
       C = 1.68_r8  *log(ww)+129.35_r8
-      RHw=(A*T*T+B*T+C)*0.01_r8
+      RHw=(A*T*T+B*T+C)*0.01_r8 ! LP2005 eq 3.1; in this case around RHw = 1.3
 
       if((T.le.-37.0_r8) .and. ((RH*subgrid).ge.RHw)) then
 
