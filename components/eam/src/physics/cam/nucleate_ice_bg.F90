@@ -9,18 +9,21 @@ module nucleate_ice_bg
 !
 !
 ! Method:
-!  The current method is based on Liu & Penner (2005) & Liu et al. (2007)
-!  It related the ice nucleation with the aerosol number, temperature and the
-!  updraft velocity. It includes homogeneous freezing of sulfate & immersion
-!  freezing on mineral dust (soot disabled) in cirrus clouds, and 
-!  Meyers et al. (1992) deposition nucleation in mixed-phase clouds
+!  The current method is based on Liu & Penner (2005; hereafter LP2005) for 
+!  homogeneous vs heterogeneous competition. It relates the ice 
+!  nucleation with the aerosol number, temperature and the updraft velocity.
+!  It includes homogeneous freezing of sulfate & immersion
+!  freezing on dust in cirrus clouds and either Cooper (1986) or
+!  Meyers et al. (1992) deposition nucleation in mixed-phase clouds.
+!  
+!  There are 'switches' for cirrus deposition based on Mohler et al. (2006) based
+!  on their lab experiements or homogeneous freezing only based on LP2005. If 
+!  we turn on homogeneous freezing only, then we turn off HET freezing.
 !
 !  The effect of preexisting ice crystals on ice nucleation in cirrus clouds is included, 
 !  and also consider the sub-grid variability of temperature in cirrus clouds,
 !  following X. Shi et al. ACP (2014).
 !
-!  Ice nucleation in mixed-phase clouds now uses classical nucleation theory (CNT),
-!  follows Y. Wang et al. ACP (2014), Hoose et al. (2010).
 !
 ! Authors:
 !  Xiaohong Liu, 01/2005, modifications by A. Gettelman 2009-2010,
@@ -40,12 +43,14 @@ save
 
 integer, parameter :: r8 = selected_real_kind(12)
 
-public :: nucleati_init, nucleati
+public :: nucleati_bg_init, nucleati_bg
 
 logical  :: use_preexisting_ice
-logical  :: use_hetfrz_classnuc
-logical  :: use_nie_nucleate
-logical  :: use_dem_nucleate
+logical  :: do_meyers    
+logical  :: do_new_bg_lp_frz   
+logical  :: do_ci_mohler_dep  
+logical  :: do_lphom     
+logical  :: no_limits      
 
 real(r8) :: pi
 real(r8) :: mincld
@@ -68,24 +73,27 @@ contains
 !===============================================================================
 
 subroutine nucleati_bg_init( &
-   use_preexisting_ice_in, use_hetfrz_classnuc_in, &
-   use_nie_nucleate_in, use_dem_nucleate_in, &
+   use_preexisting_ice_in, do_meyers_in, do_new_bg_lp_frz_in, &
+   do_ci_mohler_dep_in, do_lphom_in, no_limits_in, &
    iulog_in, pi_in, mincld_in, subgrid_in)
 
    logical,  intent(in) :: use_preexisting_ice_in
-   logical,  intent(in) :: do_meyers
-   logical,  intent(in) :: do_new_bg_lp_frz
-   logical,  intent(in) :: do_cirrus_mohler_ice_nucleation
-   logical,  intent(in) :: do_lphom_ice_nucleation
+   logical,  intent(in) :: do_meyers_in
+   logical,  intent(in) :: do_new_bg_lp_frz_in
+   logical,  intent(in) :: do_ci_mohler_dep_in
+   logical,  intent(in) :: do_lphom_in
+   logical,  intent(in) :: no_limits_in
    integer,  intent(in) :: iulog_in
    real(r8), intent(in) :: pi_in
    real(r8), intent(in) :: mincld_in
    real(r8), intent(in) :: subgrid_in
 
    use_preexisting_ice = use_preexisting_ice_in
-   use_hetfrz_classnuc = use_hetfrz_classnuc_in
-   use_nie_nucleate    = use_nie_nucleate_in
-   use_dem_nucleate    = use_dem_nucleate_in
+   do_meyers           = use_hetfrz_classnuc_in
+   do_new_bg_lp_frz    = do_new_bg_lp_frz_in
+   do_ci_mohler_dep    = do_ci_mohler_dep_in
+   do_lphom            = do_lphom_in
+   no_limits           = no_limits_in
    iulog               = iulog_in
    pi                  = pi_in
    mincld              = mincld_in
@@ -101,7 +109,7 @@ subroutine nucleati_bg(  &
    wbar, tair, pmid, relhum, supersat_i &
    qc, qi, ni, inv_rho,                 &
    so4_num, dst_num,                    &
-   nuci, onihf, oniimm, onidep, onimey, &
+   nuci, onihf, oniimm, onidep, onimix, &
    wpice, weff, fhom )
 
    !---------------------------------------------------------------
@@ -149,6 +157,8 @@ subroutine nucleati_bg(  &
    real(r8) :: niimm                   ! nucleated number from immersion freezing
    real(r8) :: nidep                   ! nucleated number from deposition nucleation
    real(r8) :: nimix                   ! nucleated number from deposition nucleation (mixed phase)
+   real(r8) :: nimoh                   ! nucleated number from cirrus deposition (Mohler 2006)
+   real(r8) :: nilphf                  ! nucleated number from homogeneous freezing only (LP2005)
    real(r8) :: n1, ni                  ! nucleated number
    real(r8) :: qsmall                  ! min allowable cloud condensate to be considered cloud
    real(r8) :: tc, A, B, regm, dum     ! work variable
@@ -165,9 +175,14 @@ subroutine nucleati_bg(  &
    real(r8) :: weffhet    ! effective Vertical velocity for ice nucleation (m/s)  weff=wbar-wpicehet 
    !-------------------------------------------------------------------------------
 
-
+   ! define work variables
    tc = tair-273.15_r8
    qsmall = 1.e-14_r8
+   
+   ! initialize ni values
+   nimix  = 0._r8
+   nimh   = 0._r8
+   nilphf = 0._r8
    
    !---MIXED-PHASE--------------------------------------------------------------------------
 
@@ -202,7 +217,7 @@ subroutine nucleati_bg(  &
         endif
         
         if ( (tc.lt.-37_r8) .and. (supersat_i.ge.scrit) ) then
-           nidep = dst_num ! #/cm3
+           nimoh = dst_num ! #/cm3
         endif 
    endif ! mohler 
    
@@ -215,7 +230,7 @@ subroutine nucleati_bg(  &
          
          if ( (tc.lt.-37._r8)  .and. (supersat_i.ge.0.42_r8) ) then 
             ! BG added some very conservative supi condition not to always go in that loop
-            call hf(tc, w, relhum, so4_num, nihf) 
+            call hf(tc, w, relhum, so4_num, nilphf)
          endif  
       
    endif ! do_lphom_ice_nucleation
@@ -400,19 +415,29 @@ subroutine nucleati_bg(  &
 
    !---end----------------------------------------------------
 
-   nuci=ni+nimix
+   ! impose limits
+   if ( no_limits .eq. .true.) then
+      nimix = min(nimix,150.e+3_r8) !BG increased max limit from 100 to 150/L
+      nimoh = min(nimoh,100.e+3_r8) !max to 100/L
+      nilphf = min(nilphf,80.e+6_r8)!max to 80,000/L
+      ni = min(ni,80.e+6_r8)        !max to 80,000/L
+   endif
+   
+   nuci=ni+nimix+nimoh+nilphf
    
    if ( (nuci.gt.9999._r8) .or. (nuci.lt.0._r8) ) then
       write(iulog, *) 'Warning: incorrect ice nucleation number (nuci reset =0)'
       write(iulog, *) ni, tair, relhum, wbar, nihf, niimm, nidep,deles,esi,dst_num,so4_num
       nuci=0._r8
    endif
+   
 
-   nuci   = nuci*1.e+6_r8*inv_rho    ! change unit from #/cm3 to #/kg
+   ! change unit from #/cm3 to #/kg
+   nuci   = nuci*1.e+6_r8*inv_rho
    onimix = nimix*1.e+6_r8*inv_rho
-   onidep = nidep*1.e+6_r8*inv_rho
+   onidep = (nidep+nimoh)*1.e+6_r8*inv_rho
    oniimm = niimm*1.e+6_r8*inv_rho
-   onihf  = nihf*1.e+6_r8*inv_rho
+   onihf  = (nihf+nilphf)*1.e+6_r8*inv_rho
 
 end subroutine nucleati_bg
 
