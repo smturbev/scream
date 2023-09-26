@@ -102,6 +102,9 @@ real(r8)          :: micro_mg_accre_enhan_fac = huge(1.0_r8) !!Accretion enhance
 logical           :: liqcf_fix            = .false.    ! liq cld fraction fix calc.                     
 logical           :: regen_fix            = .false.    ! aerosol regeneration bug fix for ndrop.F90 
 logical           :: demott_ice_nuc       = .false.    ! use DeMott ice nucleation treatment in microphysics 
+logical           :: do_new_bg_lp_freezing= .false.    ! use new ice_nuc by blaz gasparini using LP2005
+logical           :: do_meyers            = .false.    ! meyers or cooper freezing for mixed phase/default freezing
+logical           :: 
 logical           :: pergro_mods          = .false.    ! for invoking pergro related changes in the code
 logical           :: pergro_test_active   = .false.    ! for invoking pergro test
 integer           :: history_budget_histfile_num = 1   ! output history file number for budget fields
@@ -210,7 +213,8 @@ subroutine phys_ctl_readnl(nlfile)
       use_gw_energy_fix, &
       cld_macmic_num_steps, micro_do_icesupersat, &
       fix_g1_err_ndrop, ssalt_tuning, resus_fix, convproc_do_aer, &
-      convproc_do_gas, convproc_method_activate, liqcf_fix, regen_fix, demott_ice_nuc, pergro_mods, pergro_test_active, &
+      convproc_do_gas, convproc_method_activate, liqcf_fix, regen_fix, demott_ice_nuc, &
+      do_new_bg_lp_freezing, do_meyers, pergro_mods, pergro_test_active, &
       mam_amicphys_optaa, n_so4_monolayers_pcage,micro_mg_accre_enhan_fac, &
       l_tracer_aero, l_vdiff, l_rayleigh, l_gw_drag, l_ac_energy_chk, &
       l_bc_energy_fix, l_dry_adj, l_st_mac, l_st_mic, l_rad, prc_coef1,prc_exp,prc_exp1,cld_sed,mg_prc_coeff_fix, &
@@ -305,6 +309,8 @@ subroutine phys_ctl_readnl(nlfile)
    call mpibcast(liqcf_fix,                       1 , mpilog,  0, mpicom)
    call mpibcast(regen_fix,                       1 , mpilog,  0, mpicom)
    call mpibcast(demott_ice_nuc,                  1 , mpilog,  0, mpicom)
+   call mpibcast(do_new_bg_lp_freezing,           1 , mpilog,  0, mpicom)
+   call mpibcast(do_meyers,                       1 , mpilog,  0, mpicom)
    call mpibcast(pergro_mods,                     1 , mpilog,  0, mpicom)
    call mpibcast(pergro_test_active,              1 , mpilog,  0, mpicom)
    call mpibcast(l_tracer_aero,                   1 , mpilog,  0, mpicom)
@@ -512,7 +518,8 @@ subroutine phys_getopts(deep_scheme_out, shallow_scheme_out, eddy_scheme_out, &
                         cld_macmic_num_steps_out, micro_do_icesupersat_out, &
                         fix_g1_err_ndrop_out, ssalt_tuning_out,resus_fix_out,convproc_do_aer_out,  &
                         convproc_do_gas_out, convproc_method_activate_out, mam_amicphys_optaa_out, n_so4_monolayers_pcage_out, &
-                        micro_mg_accre_enhan_fac_out, liqcf_fix_out, regen_fix_out,demott_ice_nuc_out, pergro_mods_out, pergro_test_active_out &
+                        micro_mg_accre_enhan_fac_out, liqcf_fix_out, regen_fix_out,demott_ice_nuc_out, &
+                        do_new_bg_lp_freezing_out,do_meyers, pergro_mods_out, pergro_test_active_out &
                        ,l_tracer_aero_out, l_vdiff_out, l_rayleigh_out, l_gw_drag_out, l_ac_energy_chk_out  &
                        ,l_bc_energy_fix_out, l_dry_adj_out, l_st_mac_out, l_st_mic_out, l_rad_out  &
                        ,prc_coef1_out,prc_exp_out,prc_exp1_out, cld_sed_out,mg_prc_coeff_fix_out,rrtmg_temp_fix_out &
@@ -583,7 +590,9 @@ subroutine phys_getopts(deep_scheme_out, shallow_scheme_out, eddy_scheme_out, &
    real(r8),          intent(out), optional :: micro_mg_accre_enhan_fac_out
    logical,           intent(out), optional :: liqcf_fix_out       
    logical,           intent(out), optional :: regen_fix_out       
-   logical,           intent(out), optional :: demott_ice_nuc_out  
+   logical,           intent(out), optional :: demott_ice_nuc_out 
+   logical,           intent(out), optional :: do_new_bg_lp_freezing_out
+   logical,           intent(out), optional :: do_meyers
    logical,           intent(out), optional :: pergro_mods_out     
    logical,           intent(out), optional :: pergro_test_active_out     
 
@@ -665,7 +674,9 @@ subroutine phys_getopts(deep_scheme_out, shallow_scheme_out, eddy_scheme_out, &
    if ( present(micro_mg_accre_enhan_fac_out)) micro_mg_accre_enhan_fac_out = micro_mg_accre_enhan_fac
    if ( present(liqcf_fix_out           ) ) liqcf_fix_out            = liqcf_fix      
    if ( present(regen_fix_out           ) ) regen_fix_out            = regen_fix      
-   if ( present(demott_ice_nuc_out      ) ) demott_ice_nuc_out       = demott_ice_nuc 
+   if ( present(demott_ice_nuc_out      ) ) demott_ice_nuc_out       = demott_ice_nuc
+   if ( present(do_new_bg_lp_freezing_out) ) do_new_bg_lp_freezing_out = do_new_bg_lp_freezing
+   if ( present(do_meyers) ) 
    if ( present(pergro_mods_out         ) ) pergro_mods_out          = pergro_mods
    if ( present(pergro_test_active_out  ) ) pergro_test_active_out   = pergro_test_active
 

@@ -46,7 +46,6 @@ public :: &
 logical, public, protected :: use_preexisting_ice = .false.
 logical                    :: hist_preexisting_ice = .false.
 logical, public, protected :: no_limits = .false.
-logical, public, protected :: do_meyers = .false.
 logical, public, protected :: do_ci_mohler_dep = .false.
 logical, public, protected :: do_lphom = .false.
 \real(r8)                  :: nucleate_ice_subgrid
@@ -83,7 +82,7 @@ subroutine nucleate_ice_bg_cam_readnl(nlfile)
   character(len=*), parameter :: subname = 'nucleate_ice_bg_cam_readnl'
 
   namelist /nucleate_ice_nl/ use_preexisting_ice, hist_preexisting_ice, &
-                             no_limits, do_meyers, do_ci_mohler_dep,    &
+                             no_limits, do_ci_mohler_dep,    &
                              do_lphom, nucleate_ice_subgrid
 
   !-----------------------------------------------------------------------------
@@ -108,7 +107,6 @@ subroutine nucleate_ice_bg_cam_readnl(nlfile)
   call mpibcast(use_preexisting_ice,  1, mpilog, 0, mpicom)
   call mpibcast(hist_preexisting_ice, 1, mpilog, 0, mpicom)
   call mpibcast(no_limits,  1, mpilog, 0, mpicom)
-  call mpibcast(do_meyers,  1, mpilog, 0, mpicom)
   call mpibcast(do_ci_mohler_dep,     1, mpilog, 0, mpicom)
   call mpibcast(do_lphom ,  1, mpilog, 0, mpicom)
   call mpibcast(nucleate_ice_subgrid, 1, mpir8, 0, mpicom)
