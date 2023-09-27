@@ -676,7 +676,7 @@ subroutine phys_getopts(deep_scheme_out, shallow_scheme_out, eddy_scheme_out, &
    if ( present(regen_fix_out           ) ) regen_fix_out            = regen_fix      
    if ( present(demott_ice_nuc_out      ) ) demott_ice_nuc_out       = demott_ice_nuc
    if ( present(do_new_bg_lp_freezing_out) ) do_new_bg_lp_freezing_out = do_new_bg_lp_freezing
-   if ( present(do_meyers) ) 
+   if ( present(do_meyers_out           ) ) do_meyers_out            = do_meyers
    if ( present(pergro_mods_out         ) ) pergro_mods_out          = pergro_mods
    if ( present(pergro_test_active_out  ) ) pergro_test_active_out   = pergro_test_active
 
