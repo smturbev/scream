@@ -58,6 +58,7 @@ module micro_p3
        NumCirrusSulf, NumCirrusINP, & ! added for new ice_nucleation -ST
        mi25, mi35 ! added for vapor dep scaling -ST
    use wv_sat_scream, only:qv_sat
+   use phys_control, only: do_meyers, do_new_bg_lp_freezing
    use nucleate_ice, only: nucleati
    use nucleate_ice_bg, only: nucleati_bg
 
@@ -468,21 +469,21 @@ contains
 
   SUBROUTINE p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
        dep_scaling_small, & ! added for ice_deposition_sublimation -ST 
-       do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, dt, inv_dt, & ! ST - added new_lp, cirrus_mohler, lphom
-       pres, inv_exner, inv_cld_frac_l, inv_cld_frac_i, inv_cld_frac_r, ni_activated, &
-       inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl, & ! ST - added uzpl (vertical velocity)
+       dt, inv_dt, pres, inv_exner, inv_cld_frac_l, inv_cld_frac_i, inv_cld_frac_r, ni_activated, &
+       inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl, & 
        t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_l, qv_supersat_i, rhofaci, acn, qv, th_atm, qc, nc, qr, nr, qi, ni, &
        qm, bm, latent_heat_vapor, latent_heat_sublim, latent_heat_fusion, qc_incld, qr_incld, qi_incld, qm_incld, nc_incld, nr_incld, &
        ni_incld, bm_incld, mu_c, nu, lamc, cdist, cdist1, cdistr, mu_r, lamr, logn0r, qv2qi_depos_tend, precip_total_tend, &
        nevapr, qr_evap_tend, vap_liq_exchange, vap_ice_exchange, liq_ice_exchange, pratot, &
        prctot, p3_tend_out, is_hydromet_present)
 
+
     implicit none
 
     ! args
 
     integer, intent(in) :: kts, kte, kbot, ktop, kdir
-    logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN, do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation
+    logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN
     real(rtype), intent(in) :: dt, inv_dt, dep_scaling_small
 
     real(rtype), intent(in), dimension(kts:kte) :: pres, inv_exner, inv_cld_frac_l,  &
@@ -764,11 +765,13 @@ contains
 
       !................................................................
       ! deposition/condensation-freezing nucleation
+      ! homogeneous and heterogeneous competition
       call ice_nucleation(t_atm(k),inv_rho(k),&
-           ni(k),ni_activated(k),qv_supersat_l(k),qv_supersat_i(k),inv_dt,qc(k),uzpl(k),&
-           do_predict_nc, do_prescribed_CCN,  &
-           do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, &
-           qinuc, ni_nucleat_tend)
+           ni(k),ni_activated(k),qv_supersat_l(k),qv_supersat_i(k), &
+           inv_dt,qc(k),qi(k),uzpl(k),pres(k) &
+           do_predict_nc, do_prescribed_CCN, do_meyers,  &
+           qinuc, ni_nucleat_tend,  &
+           nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix, wpice, weff, fhom)
 
       !................
       ! cloud water autoconversion
@@ -1131,7 +1134,7 @@ contains
 
   SUBROUTINE p3_main(qc,nc,qr,nr,th_atm,qv,dt,qi,qm,ni,bm,   &
        pres,dz,nc_nuceat_tend,nccn_prescribed,ni_activated,inv_qc_relvar,it,precip_liq_surf,precip_ice_surf,its,ite,kts,kte,diag_eff_radius_qc,     &
-       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, dep_scaling_small, sed_scaling_small, do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, uzpl, &
+       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, dep_scaling_small, sed_scaling_small, uzpl, &
        dpres,inv_exner,qv2qi_depos_tend,precip_total_tend,nevapr,qr_evap_tend,precip_liq_flux,precip_ice_flux,cld_frac_r,cld_frac_l,cld_frac_i,  &
        p3_tend_out,mu_c,lamc,liq_ice_exchange,vap_liq_exchange, &
        vap_ice_exchange,qv_prev,t_prev,col_location &
@@ -1208,7 +1211,6 @@ contains
 
     ! INPUT for prescribed CCN option
     logical(btype), intent(in)                                  :: do_prescribed_CCN
-    logical(btype), intent(in)         :: do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation
     
     ! INPUT for scaling factor in ice vapor deposition & sedimentation -ST
     ! set in micro_p3_interface.F90
@@ -1384,7 +1386,7 @@ contains
 
        call p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
             dep_scaling_small, &
-            do_new_lp_freezing, no_cirrus_mohler_ice_nucleation, no_lphom_ice_nucleation, dt, inv_dt, &
+            dt, inv_dt, &
             pres(i,:), inv_exner(i,:), &
             inv_cld_frac_l(i,:), inv_cld_frac_i(i,:), inv_cld_frac_r(i,:), ni_activated(i,:), inv_qc_relvar(i,:), &
             cld_frac_i(i,:), cld_frac_l(i,:), cld_frac_r(i,:), qv_prev(i,:), t_prev(i,:), uzpl(i,:), &
@@ -1397,6 +1399,7 @@ contains
             cdistr(i,:), mu_r(i,:), lamr(i,:), logn0r(i,:), qv2qi_depos_tend(i,:), precip_total_tend(i,:), &
             nevapr(i,:), qr_evap_tend(i,:), vap_liq_exchange(i,:), vap_ice_exchange(i,:), &
             liq_ice_exchange(i,:), pratot(i,:), prctot(i,:), p3_tend_out(i,:,:), is_hydromet_present)
+            
 
        ! measure microphysics processes tendency output
        p3_tend_out(i,:,42) = ( qc(i,:)    - qc_old(i,:) ) * inv_dt    ! Liq. microphysics tendency, measure
@@ -2584,30 +2587,28 @@ end subroutine rain_immersion_freezing
 
 
 subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_supersat_i, inv_dt, &
-   qc, uzpl, p_atm, & ! added for new ice freezing from BG
-   do_predict_nc, do_prescribed_CCN,   & ! old 
-   do_meyers, &
-   qinuc, ni_nucleat_tend)
+   qc, qi, uzpl, p_atm, do_predict_nc, do_prescribed_CCN, do_meyers, &
+   qinuc, ni_nucleat_tend, nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix, wpice, weff, fhom)
+   
 
    !................................................................
-   ! deposition/condensation-freezing nucleation
-   ! allow ice nucleation if < -15 C and > 5% ice supersaturation
-   ! use CELL-AVERAGE values, freezing of vapor
-   ! TODO: ST - make different ice categories for each type of nucleation,
-   !       then add together at the end (or make separate output for each)
+   ! deposition/condensation-freezing nucleation,
+   ! homogeneous and heterogeneous nucleation based on LP2005
+   !................................................................
 
    implicit none
 
-   real(rtype), intent(in) :: t_atm
-   real(rtype), intent(in) :: inv_rho
-   real(rtype), intent(in) :: p_atm
-   real(rtype), intent(in) :: ni
-   real(rtype), intent(in) :: ni_activated
-   real(rtype), intent(in) :: qv_supersat_i
-   real(rtype), intent(in) :: qv_supersat_l
-   real(rtype), intent(in) :: inv_dt
-   real(rtype), intent(in) :: qc   ! cloud water mixing ratio (kg/kg)
-   real(rtype), intent(in) :: uzpl ! vertical velocity (Pa/s)
+   real(rtype), intent(in) :: t_atm         ! temperature (K)
+   real(rtype), intent(in) :: inv_rho       ! inverse of density 1/(kg/m3)
+   real(rtype), intent(in) :: p_atm         ! pressure (Pa)
+   real(rtype), intent(in) :: ni            ! ice number
+   real(rtype), intent(in) :: ni_activated  ! num of activated ice nuclei
+   real(rtype), intent(in) :: qv_supersat_i ! supersat wrt ice
+   real(rtype), intent(in) :: qv_supersat_l ! supersat wrt liquid
+   real(rtype), intent(in) :: inv_dt        ! inverse of dt (timestep)
+   real(rtype), intent(in) :: qi            ! cloud ice water mixing ratio (kg/kg)
+   real(rtype), intent(in) :: qc            ! cloud water mixing ratio (kg/kg)
+   real(rtype), intent(in) :: uzpl          ! vertical velocity (Pa/s)
    logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN
 
    real(rtype), intent(inout) :: qinuc
@@ -2620,26 +2621,28 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    real(rtype) :: dum, N_nuc, Q_nuc
    real(rtype) :: ndust, nsulf, qsmall, w, niimm, nidep, nihf, scrit ! for new BG code
    real(rtype) :: wbar1, wbar2, deles, esi, A, B, regm, n1, tc ! work variables
-   !logical(btype) :: nnuc1_flag = .true., nnuc2_flag = .true. , nnuc3_flag = .true., nnuc4_flag = .true., nnuc_flag = .true., nnuc0_flag = .true.
 
    ! convert uzpl to w (Pa/s -> m/s)
    w = - uzpl * inv_rho * 0.102_rtype ! omega * 1/rho * 1/g  [m/s]
-   !w = uzpl ! for tests only
    
    ! minium allowable prognostic variables
-   qsmall = 1.e-14
+   qsmall = 1.e-14_rtype
    
    ! get value from utils
    nsulf = NumCirrusSulf
    ndust = NumCirrusINP
    
    !-------------------------------------------------------------------------------------
-   !-       Main ice nucleation code                                                    -
+   ! Main ice nucleation code   
+   !  Three options:
+   !   1. New scheme from Blaz, modified to work with P3
+   !   2. LP2005 HOM vs HET freezing
+   !   3. Default/basic - meyers or cooper freezing                                                 
    !-------------------------------------------------------------------------------------
+   
    if ( do_new_bg_lp_freezing .eq. .false. ) then
    
-      ! use new code from Blaz (with limits removed)
-      ! TODO: make a new version with the limits back in there
+      ! use new code from Blaz
       
       call nucleati_bg(w, t_atm, p_atm, qv_supersat_l+1._rtype, qv_supersat_i, &
                     qc, qi, ni, inv_rho, nsulf, ndust,         &
@@ -2647,6 +2650,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
                     wpice, weff, fhom ) ! outputs
       
       N_nuc = max(0._rtype,nnuc*inv_dt) !pre-existing ice already accounted for
+      !!!!! do we want nnuc_hom, etc. also to be divided by dt? before being output?
       if (N_nuc.ge.1.e-20_rtype) then
          Q_nuc = max(0._rtype,N_nuc*mi0)
          qinuc = Q_nuc
@@ -2661,7 +2665,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
       
       call nucleati(w, t_atm, p_atm, qv_supersat_l+1._rtype, cldn, &
                     qc, qi, ni, 1/inv_rho, nsulf, ndust,         &
-                    nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mey,  & ! outputs
+                    nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix,  & ! outputs
                     wpice, weff, fhom ) ! outputs
       
       N_nuc = max(0._rtype,nnuc*inv_dt) !pre-existing ice already accounted for
