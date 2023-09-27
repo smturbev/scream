@@ -866,7 +866,6 @@ end subroutine micro_p3_readnl
 
     logical :: do_predict_nc           !prognostic droplet concentration or not?
     logical :: do_subgrid_clouds       !use subgrid cloudiness in tendency calculations?
-    logical :: do_new_lp_freezing=.false., no_cirrus_mohler_ice_nucleation=.false., no_lphom_ice_nucleation=.false.
     integer :: icol, ncol, k
     integer :: psetcols, lchnk
     integer :: itim_old
@@ -1117,9 +1116,6 @@ end subroutine micro_p3_readnl
          do_prescribed_CCN,           & ! IN
          dep_scaling_small,           & ! IN     scaling factor for vapor deposition on small ice particles
          sed_scaling_small,           & ! IN     scaling factor for ice sedimentation on small ice particles
-         do_new_lp_freezing,          & ! IN     .true.=new ice nuc., .false.=standard p3 ice nuc
-         no_cirrus_mohler_ice_nucleation, & ! IN .true.=no cirrus mohler, .false.=cirrus mohler active
-         no_lphom_ice_nucleation,     & ! IN     .true.=no hom frz via LP2005, .false.=hom frz active
          state%omega(its:ite,kts:kte),& ! IN  vertical veloctiy, omega            Pa/s
          ! AaronDonahue new stuff
          state%pdeldry(its:ite,kts:kte),  & ! IN pressure level thickness for computing total mass
