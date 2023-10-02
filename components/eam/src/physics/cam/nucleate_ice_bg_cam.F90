@@ -14,7 +14,6 @@ use physconst,      only: pi, rair, tmelt
 use constituents,   only: cnst_get_ind
 use physics_types,  only: physics_state
 use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_old_tim_idx, pbuf_get_field
-use phys_control,   only: do_new_bg_lp_frz
 
 use physics_buffer, only: pbuf_add_field, dtype_r8, pbuf_old_tim_idx, &
                           pbuf_get_index, pbuf_get_field
@@ -28,7 +27,7 @@ use shr_spfn_mod,   only: erf => shr_spfn_erf
 use cam_logfile,    only: iulog
 use cam_abortutils, only: endrun
 
-use nucleate_ice,   only: nucleati_init, nucleati
+use nucleate_ice_bg,   only: nucleati_init_bg, nucleati_bg
 
 
 implicit none
@@ -46,9 +45,13 @@ public :: &
 logical, public, protected :: use_preexisting_ice = .false.
 logical                    :: hist_preexisting_ice = .false.
 logical, public, protected :: no_limits = .false.
+logical, public, protected :: do_meyers = .false.
+logical, public, protected :: do_new_bg_lp_frz = .false.
 logical, public, protected :: do_ci_mohler_dep = .false.
 logical, public, protected :: do_lphom = .false.
-\real(r8)                  :: nucleate_ice_subgrid
+logical, public, protected :: do_nucleate_ice_sc = .false. 
+                        ! cannot be true same time as do_new_bg_lp_freezing
+real(r8)                  :: nucleate_ice_subgrid
 
 ! Vars set via init method.
 real(r8) :: mincld      ! minimum allowed cloud fraction
@@ -82,8 +85,9 @@ subroutine nucleate_ice_bg_cam_readnl(nlfile)
   character(len=*), parameter :: subname = 'nucleate_ice_bg_cam_readnl'
 
   namelist /nucleate_ice_nl/ use_preexisting_ice, hist_preexisting_ice, &
-                             no_limits, do_ci_mohler_dep,    &
-                             do_lphom, nucleate_ice_subgrid
+                             no_limits, do_meyers, do_new_bg_lp_frz, &
+                             do_ci_mohler_dep, do_lphom, do_nucleate_ice_sc, &
+                             nucleate_ice_subgrid
 
   !-----------------------------------------------------------------------------
 
@@ -107,8 +111,11 @@ subroutine nucleate_ice_bg_cam_readnl(nlfile)
   call mpibcast(use_preexisting_ice,  1, mpilog, 0, mpicom)
   call mpibcast(hist_preexisting_ice, 1, mpilog, 0, mpicom)
   call mpibcast(no_limits,  1, mpilog, 0, mpicom)
+  call mpibcast(do_meyers,  1, mpilog, 0, mpicom)
+  call mpibcast(do_new_bg_lp_frz,  1, mpilog, 0, mpicom)
   call mpibcast(do_ci_mohler_dep,     1, mpilog, 0, mpicom)
   call mpibcast(do_lphom ,  1, mpilog, 0, mpicom)
+  call mpibcast(do_nucleate_ice_sc,  1, mpilog, 0, mpicom)
   call mpibcast(nucleate_ice_subgrid, 1, mpir8, 0, mpicom)
 #endif
 
@@ -171,7 +178,7 @@ subroutine nucleate_ice_bg_cam_init(mincld_in, bulk_scale_in)
    end if
    
    call nucleati_bg_init(use_preexisting_ice, do_meyers, do_new_bg_lp_frz, &
-                         do_ci_mohler_dep, do_lphom, no_limits, &
+                         do_ci_mohler_dep, do_lphom, do_nucleate_ice_sc, no_limits, &
                          iulog, pi, mincld, subgrid)
 
    ! get indices for fields in the physics buffer

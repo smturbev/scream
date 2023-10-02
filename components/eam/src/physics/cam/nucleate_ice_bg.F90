@@ -46,11 +46,11 @@ integer, parameter :: r8 = selected_real_kind(12)
 public :: nucleati_bg_init, nucleati_bg
 
 logical  :: use_preexisting_ice
-logical  :: do_meyers    
 logical  :: do_new_bg_lp_frz   
 logical  :: do_ci_mohler_dep  
 logical  :: do_lphom     
-logical  :: no_limits      
+logical  :: no_limits
+logical  :: do_nucleate_ice_sc
 
 real(r8) :: pi
 real(r8) :: mincld
@@ -73,27 +73,27 @@ contains
 !===============================================================================
 
 subroutine nucleati_bg_init( &
-   use_preexisting_ice_in, do_meyers_in, do_new_bg_lp_frz_in, &
-   do_ci_mohler_dep_in, do_lphom_in, no_limits_in, &
+   use_preexisting_ice_in, do_new_bg_lp_frz_in, &
+   do_ci_mohler_dep_in, do_lphom_in, do_nucleate_ice_sc_in, no_limits_in, &
    iulog_in, pi_in, mincld_in, subgrid_in)
 
    logical,  intent(in) :: use_preexisting_ice_in
-   logical,  intent(in) :: do_meyers_in
    logical,  intent(in) :: do_new_bg_lp_frz_in
    logical,  intent(in) :: do_ci_mohler_dep_in
    logical,  intent(in) :: do_lphom_in
    logical,  intent(in) :: no_limits_in
+   logical,  intent(in) :: do_nucleate_ice_sc_in
    integer,  intent(in) :: iulog_in
    real(r8), intent(in) :: pi_in
    real(r8), intent(in) :: mincld_in
    real(r8), intent(in) :: subgrid_in
 
    use_preexisting_ice = use_preexisting_ice_in
-   do_meyers           = use_hetfrz_classnuc_in
    do_new_bg_lp_frz    = do_new_bg_lp_frz_in
    do_ci_mohler_dep    = do_ci_mohler_dep_in
    do_lphom            = do_lphom_in
    no_limits           = no_limits_in
+   do_nucleate_ice_sc  = do_nucleate_ice_sc_in
    iulog               = iulog_in
    pi                  = pi_in
    mincld              = mincld_in
@@ -101,14 +101,14 @@ subroutine nucleati_bg_init( &
 
    ci = rhoice*pi/6._r8
 
-end subroutine nucleati_init
+end subroutine nucleati_bg_init
 
 !===============================================================================
 
 subroutine nucleati_bg(  &
-   wbar, tair, pmid, relhum, supersat_i &
-   qc, qi, ni, inv_rho,                 &
-   so4_num, dst_num,                    &
+   wbar, tair, pmid, relhum, supersat_i,&
+   qc, qi, ni_pre, inv_rho,             &
+   so4_num, dst_num, do_meyers,         &
    nuci, onihf, oniimm, onidep, onimix, &
    wpice, weff, fhom )
 
@@ -131,13 +131,14 @@ subroutine nucleati_bg(  &
    real(r8), intent(in) :: pmid        ! pressure at layer midpoints (pa)
    real(r8), intent(in) :: relhum      ! relative humidity with respect to liquid
    real(r8), intent(in) :: supersat_i  ! supersaturation with respect to ice
-   real(r8), intent(in) :: cldn        ! new value of cloud fraction    (fraction)
+!   real(r8), intent(in) :: cldn        ! new value of cloud fraction    (fraction)
    real(r8), intent(in) :: qc          ! liquid water mixing ratio (kg/kg)
    real(r8), intent(in) :: qi          ! ice mass mixing ratio (kg/kg)
-   real(r8), intent(in) :: ni          ! grid-mean preexisting cloud ice number conc (#/kg) 
+   real(r8), intent(in) :: ni_pre      ! grid-mean preexisting cloud ice number conc (#/kg) 
    real(r8), intent(in) :: inv_rho     ! inverse rho (1 / air density (kg/m3))
    real(r8), intent(in) :: so4_num     ! so4 aerosol number (#/cm^3)
    real(r8), intent(in) :: dst_num     ! total dust aerosol number (#/cm^3)
+   logical,  intent(in) :: do_meyers   ! meyers or cooper
    
    ! Output Arguments
    real(r8), intent(out) :: nuci       ! ice number nucleated (#/kg)
@@ -159,10 +160,11 @@ subroutine nucleati_bg(  &
    real(r8) :: nimix                   ! nucleated number from deposition nucleation (mixed phase)
    real(r8) :: nimoh                   ! nucleated number from cirrus deposition (Mohler 2006)
    real(r8) :: nilphf                  ! nucleated number from homogeneous freezing only (LP2005)
-   real(r8) :: n1, ni                  ! nucleated number
+   real(r8) :: n1                      ! nucleated number
+   real(r8) :: ni                      ! ni working var
    real(r8) :: qsmall                  ! min allowable cloud condensate to be considered cloud
    real(r8) :: tc, A, B, regm, dum     ! work variable
-   real(r8) :: esl, esi, deles         ! work variable
+   real(r8) :: esl, esi, deles, scrit  ! work variable
    real(r8) :: wbar1, wbar2            ! work variable for preexisting ice
 
    ! used in SUBROUTINE Vpreice
@@ -178,11 +180,14 @@ subroutine nucleati_bg(  &
    ! define work variables
    tc = tair-273.15_r8
    qsmall = 1.e-14_r8
+   ni = ni_pre
+   scrit = 0._r8
    
    ! initialize ni values
    nimix  = 0._r8
-   nimh   = 0._r8
+   nimoh   = 0._r8
    nilphf = 0._r8
+
    
    !---MIXED-PHASE--------------------------------------------------------------------------
 
@@ -194,7 +199,7 @@ subroutine nucleati_bg(  &
         
         if ( do_meyers .eq. .true. ) then
            ! deposition/condensation nucleation in mixed clouds (Meyers, 1992)
-           nimix = exp(-0.639_r8+12.96_r8.*supersat_i)*1.e-3_r8  ! cm-3
+           nimix = exp(-0.639_r8+12.96_r8*supersat_i)*1.e-3_r8  ! cm-3
         else
            ! deposition/condensation nucleation in mixed clouds (Cooper 1986)
            nimix = 0.005_r8*exp(0.304_r8*tc)*1.e-3_r8 ! cm-3
@@ -204,7 +209,7 @@ subroutine nucleati_bg(  &
         
    !---CIRRUS-MOHLER-----------------------------------------------------------------------
    
-   if (do_cirrus_mohler_ice_nucleation .eq. .true.) then
+   if (do_ci_mohler_dep .eq. .true.) then
    
         ! deposition/condensation-freezing nucleation for CIRRUS
         ! following Mohler et al., 2006 lab results for dust deposition freezing
@@ -223,14 +228,14 @@ subroutine nucleati_bg(  &
    
    !---LP-HOM----------------------------------------------------------------------------
         
-   if (do_lphom_ice_nucleation .eq. .true.) then 
+   if (do_lphom .eq. .true.) then 
          
          ! HOM freezing only
          ! following Liu & Penner, 2005 (LP2005)
          
          if ( (tc.lt.-37._r8)  .and. (supersat_i.ge.0.42_r8) ) then 
             ! BG added some very conservative supi condition not to always go in that loop
-            call hf(tc, w, relhum, so4_num, nilphf)
+            call hf(tc, wbar1, relhum, so4_num, nilphf)
          endif  
       
    endif ! do_lphom_ice_nucleation
@@ -245,7 +250,7 @@ subroutine nucleati_bg(  &
       if (use_preexisting_ice) then
 
          Ni_preice = ni/inv_rho                    ! (convert from #/kg -> #/m3)
-         Ni_preice = Ni_preice / max(mincld,cldn)   ! in-cloud ice number density 
+         !Ni_preice = Ni_preice / max(mincld,cldn)  ! in-cloud ice number density 
 
 !!== KZ_BUGFIX 
          if (Ni_preice > 10.0_r8 .and. qi > 1.e-10_r8 ) then    ! > 0.01/L = 10/m3   
@@ -649,5 +654,5 @@ subroutine frachom(Tmean,RHimean,detaT,fhom)
 
 end subroutine frachom
 
-end module nucleate_ice
+end module nucleate_ice_bg
 

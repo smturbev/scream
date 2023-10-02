@@ -8,6 +8,7 @@ module phys_control
 ! 2006-05-01  D. B. Coleman,  Creation of module
 ! 2009-02-13  Eaton           Replace *_{default,set}opts methods with module namelist.
 !                             Add vars to indicate physics version and chemistry type.
+! 2023-09-28 S. Turbeville,   Add do_meyers, do_new_bg_lp_freezing (not working)
 !-----------------------------------------------------------------------
 
 use spmd_utils,    only: masterproc
@@ -104,7 +105,6 @@ logical           :: regen_fix            = .false.    ! aerosol regeneration bu
 logical           :: demott_ice_nuc       = .false.    ! use DeMott ice nucleation treatment in microphysics 
 logical           :: do_new_bg_lp_freezing= .false.    ! use new ice_nuc by blaz gasparini using LP2005
 logical           :: do_meyers            = .false.    ! meyers or cooper freezing for mixed phase/default freezing
-logical           :: 
 logical           :: pergro_mods          = .false.    ! for invoking pergro related changes in the code
 logical           :: pergro_test_active   = .false.    ! for invoking pergro test
 integer           :: history_budget_histfile_num = 1   ! output history file number for budget fields
@@ -285,7 +285,7 @@ subroutine phys_ctl_readnl(nlfile)
    call mpibcast(conv_water_in_rad,               1 , mpiint,  0, mpicom)
    call mpibcast(do_tms,                          1 , mpilog,  0, mpicom)
    call mpibcast(use_mass_borrower,               1 , mpilog,  0, mpicom)
-   call mpibcast(ieflx_opt,               1 , mpiint,  0, mpicom)
+   call mpibcast(ieflx_opt,                       1 , mpiint,  0, mpicom)
    call mpibcast(use_qqflx_fixer,                 1 , mpilog,  0, mpicom)
    call mpibcast(print_fixer_message,             1 , mpilog,  0, mpicom)
    call mpibcast(micro_do_icesupersat,            1 , mpilog,  0, mpicom)
@@ -296,7 +296,7 @@ subroutine phys_ctl_readnl(nlfile)
    call mpibcast(use_gw_oro,                      1 , mpilog,  0, mpicom)
    call mpibcast(use_gw_front,                    1 , mpilog,  0, mpicom)
    call mpibcast(use_gw_convect,                  1 , mpilog,  0, mpicom)
-   call mpibcast(use_gw_energy_fix,              1 , mpilog,  0, mpicom)
+   call mpibcast(use_gw_energy_fix,               1 , mpilog,  0, mpicom)
    call mpibcast(fix_g1_err_ndrop,                1 , mpilog,  0, mpicom)
    call mpibcast(ssalt_tuning,                    1 , mpilog,  0, mpicom)
    call mpibcast(resus_fix,                       1 , mpilog,  0, mpicom)
@@ -519,7 +519,7 @@ subroutine phys_getopts(deep_scheme_out, shallow_scheme_out, eddy_scheme_out, &
                         fix_g1_err_ndrop_out, ssalt_tuning_out,resus_fix_out,convproc_do_aer_out,  &
                         convproc_do_gas_out, convproc_method_activate_out, mam_amicphys_optaa_out, n_so4_monolayers_pcage_out, &
                         micro_mg_accre_enhan_fac_out, liqcf_fix_out, regen_fix_out,demott_ice_nuc_out, &
-                        do_new_bg_lp_freezing_out,do_meyers, pergro_mods_out, pergro_test_active_out &
+                        do_new_bg_lp_freezing_out,do_meyers_out, pergro_mods_out, pergro_test_active_out &
                        ,l_tracer_aero_out, l_vdiff_out, l_rayleigh_out, l_gw_drag_out, l_ac_energy_chk_out  &
                        ,l_bc_energy_fix_out, l_dry_adj_out, l_st_mac_out, l_st_mic_out, l_rad_out  &
                        ,prc_coef1_out,prc_exp_out,prc_exp1_out, cld_sed_out,mg_prc_coeff_fix_out,rrtmg_temp_fix_out &
@@ -540,7 +540,7 @@ subroutine phys_getopts(deep_scheme_out, shallow_scheme_out, eddy_scheme_out, &
    character(len=16), intent(out), optional :: microp_scheme_out
    character(len=16), intent(out), optional :: radiation_scheme_out
    character(len=16), intent(out), optional :: macrop_scheme_out
-   character(len=128), intent(out), optional :: ideal_phys_option_out 
+   character(len=128),intent(out), optional :: ideal_phys_option_out 
    character(len=16), intent(out), optional :: MMF_microphysics_scheme_out
    real(r8),          intent(out), optional :: MMF_orientation_angle_out
    logical,           intent(out), optional :: use_MMF_out
@@ -592,7 +592,7 @@ subroutine phys_getopts(deep_scheme_out, shallow_scheme_out, eddy_scheme_out, &
    logical,           intent(out), optional :: regen_fix_out       
    logical,           intent(out), optional :: demott_ice_nuc_out 
    logical,           intent(out), optional :: do_new_bg_lp_freezing_out
-   logical,           intent(out), optional :: do_meyers
+   logical,           intent(out), optional :: do_meyers_out
    logical,           intent(out), optional :: pergro_mods_out     
    logical,           intent(out), optional :: pergro_test_active_out     
 
