@@ -45,7 +45,9 @@ module micro_p3_utils
                             !used this number as Liu and Penner, 2005
     real,public ::  NumCirrusINP = 2.e-3 !in units per cm3! BG added some reasonable background upper tropospheric dust/het ice nuclei value for cirrus conditions
                               !BG: based on simulated upper tropospheric (200 hPa) values of dust in Tropical Western Pacific for ECHAM-HAM GCM simulations
-
+    logical, public :: do_ci_mohler_dep_frz = .false.
+    logical, public :: do_lphom_frz = .false.
+    logical, public :: no_limits_in = .false.
 
     real(rtype),public :: pi_e3sm
     ! ice microphysics lookup table array dimensions

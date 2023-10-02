@@ -128,8 +128,15 @@ module micro_p3_interface
    character(len=16)  :: micro_p3_tableversion   = unset_str ! P3 table version
    logical            :: micro_aerosolactivation = .false.   ! Use aerosol activation
    logical            :: micro_subgrid_cloud     = .false.   ! Use subgrid cloudiness
-   logical            :: micro_tend_output       = .false.   ! Default microphysics tendencies to output file
+   logical            :: micro_tend_output       = .true.    ! Default microphysics tendencies to output file
    logical            :: do_prescribed_CCN       = .false.   ! Use prescribed CCN
+   logical            :: do_meyers               = .false.   ! default to cooper for ice nucleation
+   logical            :: do_new_bg_lp_frz        = .false.   ! uses nucleate_ice_bg.f90
+   logical            :: do_nucleate_ice_sc      = .false.   ! uses nucleate_ice.f90
+   logical            :: use_preexisting_ice     = .false.   ! account for pre-existing ice or not
+   logical            :: do_ci_mohler_dep        = .false.
+   logical            :: do_lphom                = .false.
+   
    contains
 !===============================================================================
 subroutine micro_p3_readnl(nlfile)
@@ -146,7 +153,8 @@ subroutine micro_p3_readnl(nlfile)
 
   namelist /micro_nl/ &
        micro_p3_tableversion, micro_p3_lookup_dir, micro_aerosolactivation, micro_subgrid_cloud, &
-       micro_tend_output, p3_qc_autocon_expon, p3_qc_accret_expon, do_prescribed_CCN
+       micro_tend_output, p3_qc_autocon_expon, p3_qc_accret_expon, do_prescribed_CCN, do_meyers, &
+       do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice
 
   !-----------------------------------------------------------------------------
 
@@ -169,10 +177,13 @@ subroutine micro_p3_readnl(nlfile)
      write(iulog,'(A30,1x,L)')    'micro_aerosolactivation: ', micro_aerosolactivation
      write(iulog,'(A30,1x,L)')    'micro_subgrid_cloud: ',     micro_subgrid_cloud
      write(iulog,'(A30,1x,L)')    'micro_tend_output: ',       micro_tend_output
-     write(iulog,'(A30,1x,8e12.4)') 'p3_qc_autocon_expon',        p3_qc_autocon_expon
-     write(iulog,'(A30,1x,8e12.4)') 'p3_qc_accret_expon',         p3_qc_accret_expon
+     write(iulog,'(A30,1x,8e12.4)') 'p3_qc_autocon_expon',     p3_qc_autocon_expon
+     write(iulog,'(A30,1x,8e12.4)') 'p3_qc_accret_expon',      p3_qc_accret_expon
      write(iulog,'(A30,1x,L)')    'do_prescribed_CCN: ',       do_prescribed_CCN
-
+     write(iulog,'(A30,1x,L)')    'do_meyers: ',               do_meyers
+     write(iulog,'(A30,1x,L)')    'do_new_bg_lp_frz: ',        do_new_bg_lp_frz
+     write(iulog,'(A30,1x,L)')    'do_nucleate_ice_sc: ',      do_nucleate_ice_sc
+     write(iulog,'(A30,1x,L)')    'use_preexisting_ice: ',     use_preexisting_ice
   end if
 
 #ifdef SPMD
@@ -182,9 +193,13 @@ subroutine micro_p3_readnl(nlfile)
   call mpibcast(micro_aerosolactivation, 1,                          mpilog,  0, mpicom)
   call mpibcast(micro_subgrid_cloud,     1,                          mpilog,  0, mpicom)
   call mpibcast(micro_tend_output,       1,                          mpilog,  0, mpicom)
-  call mpibcast(p3_qc_autocon_expon,      1,                          mpir8,   0, mpicom)
-  call mpibcast(p3_qc_accret_expon,       1,                          mpir8,   0, mpicom)
-  call mpibcast(do_prescribed_CCN,     1,                          mpilog,  0,    mpicom)
+  call mpibcast(p3_qc_autocon_expon,     1,                          mpir8,   0, mpicom)
+  call mpibcast(p3_qc_accret_expon,      1,                          mpir8,   0, mpicom)
+  call mpibcast(do_prescribed_CCN,       1,                          mpilog,  0, mpicom)
+  call mpibcast(do_meyers,               1,                          mpilog,  0, mpicom)
+  call mpibcast(do_new_bg_lp_frz,        1,                          mpilog,  0, mpicom)
+  call mpibcast(do_nucleate_ice_sc,      1,                          mpilog,  0, mpicom)
+  call mpibcast(use_preexisting_ice,     1,                          mpilog,  0, mpicom)
 
 #endif
 
@@ -558,6 +573,15 @@ end subroutine micro_p3_readnl
    call addfld('P3_mtend_NUMICE',  (/ 'lev' /), 'A', 'kg/kg/s', 'P3 Tendency for ice cloud number due to micro processes')
    call addfld('P3_mtend_Q',       (/ 'lev' /), 'A', 'kg/kg/s', 'P3 Tendency for water vapor due to micro processes')
    call addfld('P3_mtend_TH',      (/ 'lev' /), 'A', 'kg/kg/s', 'P3 Tendency for potential temp. number due to micro processes')
+   call addfld('P3_nnuc',          (/ 'lev' /), 'A', 'kg/kg/s', 'P3 total ice number')
+   call addfld('P3_nnuc_hom',      (/ 'lev' /), 'A', 'kg/kg/s', 'P3 ice number from homogeneous freezing')
+   call addfld('P3_nnuc_imm',      (/ 'lev' /), 'A', 'kg/kg/s', 'P3 ice number from immersion freezing')
+   call addfld('P3_nnuc_dep',      (/ 'lev' /), 'A', 'kg/kg/s', 'P3 ice number from deposition freezing')
+   call addfld('P3_nnuc_mix',      (/ 'lev' /), 'A', 'kg/kg/s', 'P3 ice number from mixed phase')
+   call addfld('P3_wpice',            (/ 'lev' /), 'A', 'kg/kg/s', 'P3 diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at Shom')
+   call addfld('P3_weff',             (/ 'lev' /), 'A', 'kg/kg/s', 'P3 effective Vertical velocity for ice nucleation (m/s); weff=wbar-wpice')
+   call addfld('P3_fhom',             (/ 'lev' /), 'A', 'kg/kg/s', 'P3 how much fraction of cloud can reach Shom')
+
    ! phase change tendencies
    call addfld('vap_liq_exchange',  (/ 'lev' /), 'A', 'kg/kg/s', 'Tendency for conversion from/to vapor phase to/from liquid phase')
    call addfld('vap_ice_exchange',  (/ 'lev' /), 'A', 'kg/kg/s', 'Tendency for conversion from/to vapor phase to/from frozen phase')
@@ -654,6 +678,15 @@ end subroutine micro_p3_readnl
          call add_default('P3_mtend_NUMICE',  1, ' ')
          call add_default('P3_mtend_Q',       1, ' ')
          call add_default('P3_mtend_TH',      1, ' ')
+         ! ice nucleation
+         call add_default('P3_nnuc',     1, ' ')
+         call add_default('P3_nnuc_hom',     1, ' ')
+         call add_default('P3_nnuc_imm',     1, ' ')
+         call add_default('P3_nnuc_dep',     1, ' ')
+         call add_default('P3_nnuc_mix',     1, ' ')
+         call add_default('P3_wpice',     1, ' ')
+         call add_default('P3_weff',     1, ' ')
+         call add_default('P3_fhom',     1, ' ')
       end if
    end if
 
@@ -784,7 +817,7 @@ end subroutine micro_p3_readnl
     real(rtype) :: cld_frac_r(pcols,pver)  ! rain cloud fraction
     real(rtype) :: cld_frac_l(pcols,pver)  ! liquid cloud fraction
     real(rtype) :: cld_frac_i(pcols,pver)  ! ice cloud fraction
-    real(rtype) :: tend_out(pcols,pver,49) ! microphysical tendencies
+    real(rtype) :: tend_out(pcols,pver,57) ! microphysical tendencies
     real(rtype), dimension(pcols,pver) :: liq_ice_exchange ! sum of liq-ice phase change tendenices
     real(rtype), dimension(pcols,pver) :: vap_liq_exchange ! sum of vap-liq phase change tendenices
     real(rtype), dimension(pcols,pver) :: vap_ice_exchange ! sum of vap-ice phase change tendenices
@@ -857,6 +890,7 @@ end subroutine micro_p3_readnl
     real(rtype) :: icwnc(pcols,pver)
     real(rtype) :: dep_scaling_small=1._rtype
     real(rtype) :: sed_scaling_small=1._rtype
+    
 
 
     integer :: it                      !timestep counter                       -
@@ -1114,6 +1148,10 @@ end subroutine micro_p3_readnl
          rho_qi(its:ite,kts:kte),     & ! OUT    bulk density of ice              kg m-3
          do_predict_nc,               & ! IN     .true.=prognostic Nc, .false.=specified Nc
          do_prescribed_CCN,           & ! IN
+         do_meyers,                   & ! IN     .false.=default cooper frzing, else meyers
+         do_new_bg_lp_frz,            & ! IN - use nucleate_ice_bg.f90
+         do_nucleate_ice_sc,          & ! IN - use nucleate_ice.f90
+         use_preexisting_ice,         & ! IN - for nucleati/nucleati_bg
          dep_scaling_small,           & ! IN     scaling factor for vapor deposition on small ice particles
          sed_scaling_small,           & ! IN     scaling factor for ice sedimentation on small ice particles
          state%omega(its:ite,kts:kte),& ! IN  vertical veloctiy, omega            Pa/s
@@ -1472,6 +1510,14 @@ end subroutine micro_p3_readnl
    call outfld('P3_mtend_NUMICE',  tend_out(:,:,47), pcols, lchnk)
    call outfld('P3_mtend_Q',       tend_out(:,:,48), pcols, lchnk)
    call outfld('P3_mtend_TH',      tend_out(:,:,49), pcols, lchnk)
+   call outfld('P3_nnuc',          tend_out(:,:,50), pcols, lchnk)
+   call outfld('P3_nnuc_hom',      tend_out(:,:,51), pcols, lchnk)
+   call outfld('P3_nnuc_imm',      tend_out(:,:,52), pcols, lchnk)
+   call outfld('P3_nnuc_dep',      tend_out(:,:,53), pcols, lchnk)
+   call outfld('P3_nnuc_mix',      tend_out(:,:,54), pcols, lchnk)
+   call outfld('P3_wpice',         tend_out(:,:,55), pcols, lchnk)
+   call outfld('P3_weff',          tend_out(:,:,56), pcols, lchnk)
+   call outfld('P3_fhom',          tend_out(:,:,57), pcols, lchnk)
    ! Phase change tendencies
    call outfld('vap_ice_exchange',      vap_ice_exchange,      pcols, lchnk)
    call outfld('vap_liq_exchange',      vap_liq_exchange,      pcols, lchnk)

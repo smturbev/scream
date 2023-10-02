@@ -56,11 +56,10 @@ module micro_p3
        lookup_table_1a_dum1_c, &
        p3_qc_autocon_expon, p3_qc_accret_expon, &
        NumCirrusSulf, NumCirrusINP, & ! added for new ice_nucleation -ST
+       do_ci_mohler_dep_frz, do_lphom_frz, no_limits_in, & ! added for new_ice_nucleation -ST
        mi25, mi35 ! added for vapor dep scaling -ST
    use wv_sat_scream, only:qv_sat
-   use phys_control, only: do_meyers, do_new_bg_lp_freezing
-   use nucleate_ice, only: nucleati
-   use nucleate_ice_bg, only: nucleati_bg
+   use wv_saturation, only: svp_water, svp_ice
 
   ! Bit-for-bit math functions.
 #ifdef SCREAM_CONFIG_IS_CMAKE
@@ -468,14 +467,14 @@ contains
   END SUBROUTINE p3_main_part1
 
   SUBROUTINE p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
-       dep_scaling_small, & ! added for ice_deposition_sublimation -ST 
+       do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, dep_scaling_small, & ! added for ice_deposition_sublimation -ST 
        dt, inv_dt, pres, inv_exner, inv_cld_frac_l, inv_cld_frac_i, inv_cld_frac_r, ni_activated, &
        inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl, & 
        t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_l, qv_supersat_i, rhofaci, acn, qv, th_atm, qc, nc, qr, nr, qi, ni, &
        qm, bm, latent_heat_vapor, latent_heat_sublim, latent_heat_fusion, qc_incld, qr_incld, qi_incld, qm_incld, nc_incld, nr_incld, &
        ni_incld, bm_incld, mu_c, nu, lamc, cdist, cdist1, cdistr, mu_r, lamr, logn0r, qv2qi_depos_tend, precip_total_tend, &
        nevapr, qr_evap_tend, vap_liq_exchange, vap_ice_exchange, liq_ice_exchange, pratot, &
-       prctot, p3_tend_out, is_hydromet_present)
+       prctot, p3_tend_out, is_hydromet_present )
 
 
     implicit none
@@ -483,7 +482,7 @@ contains
     ! args
 
     integer, intent(in) :: kts, kte, kbot, ktop, kdir
-    logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN
+    logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice
     real(rtype), intent(in) :: dt, inv_dt, dep_scaling_small
 
     real(rtype), intent(in), dimension(kts:kte) :: pres, inv_exner, inv_cld_frac_l,  &
@@ -495,7 +494,7 @@ contains
          cdistr, mu_r, lamr, logn0r, qv2qi_depos_tend, precip_total_tend, nevapr, qr_evap_tend, vap_liq_exchange, &
          vap_ice_exchange, liq_ice_exchange, pratot, prctot
 
-    real(rtype), intent(inout), dimension(kts:kte,49) :: p3_tend_out ! micro physics tendencies
+    real(rtype), intent(inout), dimension(kts:kte,57) :: p3_tend_out ! micro physics tendencies
 
     logical(btype), intent(out) :: is_hydromet_present
 
@@ -557,6 +556,7 @@ contains
     real(rtype)    :: table_val_ni_lammax   ! minimum ice number (lambda limiter)  See lines  704 -  705  nlarge
     real(rtype)    :: table_val_ni_lammin   ! maximum ice number (lambda limiter)  See lines  704 -  705  nsmall
     real(rtype)    :: table_val_qi2qr_vent_melt   ! melting (ventilation term)           See lines 1212 - 1279  vdep1
+    real(rtype)    :: nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix, wpice, weff, fhom ! ice number from ice_nucleation
 
     real(rtype)    :: mu,dv,sc,dqsdt,ab,kap,epsr,epsc,epsi,epsi_tot, &
          dum1,dum3,dum4,dum5,dum6,dqsidt,abi,rhop,vtrmi1,eii
@@ -599,6 +599,9 @@ contains
       nc2ni_immers_freeze_tend  = 0._rtype;     nr_collect_tend   = 0._rtype;     ni_selfcollect_tend   = 0._rtype
       ni_nucleat_tend   = 0._rtype;     qidep   = 0._rtype;     qiberg  = 0._rtype
       nr2ni_immers_freeze_tend  = 0._rtype;     ni_sublim_tend   = 0._rtype;     qwgrth  = 0._rtype
+      nnuc = 0._rtype; nnuc_hom = 0._rtype; nnuc_imm = 0._rtype; nnuc_dep = 0._rtype; nnuc_mix = 0._rtype
+      wpice = 0._rtype; weff = 0._rtype; fhom = 0._rtype
+      
 
       log_wetgrowth = .false.
 
@@ -768,8 +771,9 @@ contains
       ! homogeneous and heterogeneous competition
       call ice_nucleation(t_atm(k),inv_rho(k),&
            ni(k),ni_activated(k),qv_supersat_l(k),qv_supersat_i(k), &
-           inv_dt,qc(k),qi(k),uzpl(k),pres(k) &
+           inv_dt,qc(k),qi(k),uzpl(k),pres(k), cld_frac_i(k), &
            do_predict_nc, do_prescribed_CCN, do_meyers,  &
+           do_new_bg_lp_frz, do_nucleate_ice_sc, &
            qinuc, ni_nucleat_tend,  &
            nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix, wpice, weff, fhom)
 
@@ -951,6 +955,16 @@ contains
       p3_tend_out(k,33) = qc2qr_ice_shed_tend     ! source for rain mass due to cloud water/ice collision above freezing and shedding or wet growth and shedding
       p3_tend_out(k,34) = 0._rtype  ! used to be qcmul, but that has been removed.  Kept at 0.0 as placeholder.
       p3_tend_out(k,35) = ncshdc    ! source for rain number due to cloud water/ice collision above freezing  and shedding (combined with NRSHD in the paper)
+      ! output associated with ice nucleation
+      p3_tend_out(k,50) = nnuc
+      p3_tend_out(k,51) = nnuc_hom
+      p3_tend_out(k,52) = nnuc_imm
+      p3_tend_out(k,53) = nnuc_dep
+      p3_tend_out(k,54) = nnuc_mix
+      p3_tend_out(k,55) = wpice
+      p3_tend_out(k,56) = weff
+      p3_tend_out(k,57) = fhom
+      
       ! Outputs associated with aerocom comparison:
       pratot(k) = qc2qr_accret_tend ! cloud drop accretion by rain
       prctot(k) = qc2qr_autoconv_tend ! cloud drop autoconversion to rain
@@ -1134,7 +1148,7 @@ contains
 
   SUBROUTINE p3_main(qc,nc,qr,nr,th_atm,qv,dt,qi,qm,ni,bm,   &
        pres,dz,nc_nuceat_tend,nccn_prescribed,ni_activated,inv_qc_relvar,it,precip_liq_surf,precip_ice_surf,its,ite,kts,kte,diag_eff_radius_qc,     &
-       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, dep_scaling_small, sed_scaling_small, uzpl, &
+       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, dep_scaling_small, sed_scaling_small, uzpl, &
        dpres,inv_exner,qv2qi_depos_tend,precip_total_tend,nevapr,qr_evap_tend,precip_liq_flux,precip_ice_flux,cld_frac_r,cld_frac_l,cld_frac_i,  &
        p3_tend_out,mu_c,lamc,liq_ice_exchange,vap_liq_exchange, &
        vap_ice_exchange,qv_prev,t_prev,col_location &
@@ -1209,8 +1223,8 @@ contains
     real(rtype), intent(out),   dimension(its:ite,kts:kte)      :: vap_liq_exchange ! sum of vap-liq phase change tendenices
     real(rtype), intent(out),   dimension(its:ite,kts:kte)      :: vap_ice_exchange ! sum of vap-ice phase change tendenices
 
-    ! INPUT for prescribed CCN option
-    logical(btype), intent(in)                                  :: do_prescribed_CCN
+    ! INPUT for prescribed ice nucleation options
+    logical(btype), intent(in)                                  :: do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice
     
     ! INPUT for scaling factor in ice vapor deposition & sedimentation -ST
     ! set in micro_p3_interface.F90
@@ -1385,7 +1399,7 @@ contains
        if (.not. (is_nucleat_possible .or. is_hydromet_present)) goto 333
 
        call p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
-            dep_scaling_small, &
+            do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, dep_scaling_small, &
             dt, inv_dt, &
             pres(i,:), inv_exner(i,:), &
             inv_cld_frac_l(i,:), inv_cld_frac_i(i,:), inv_cld_frac_r(i,:), ni_activated(i,:), inv_qc_relvar(i,:), &
@@ -2587,7 +2601,7 @@ end subroutine rain_immersion_freezing
 
 
 subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_supersat_i, inv_dt, &
-   qc, qi, uzpl, p_atm, do_predict_nc, do_prescribed_CCN, do_meyers, &
+   qc, qi, uzpl, p_atm, cldi, do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, &
    qinuc, ni_nucleat_tend, nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix, wpice, weff, fhom)
    
 
@@ -2600,16 +2614,18 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
 
    real(rtype), intent(in) :: t_atm         ! temperature (K)
    real(rtype), intent(in) :: inv_rho       ! inverse of density 1/(kg/m3)
-   real(rtype), intent(in) :: p_atm         ! pressure (Pa)
    real(rtype), intent(in) :: ni            ! ice number
    real(rtype), intent(in) :: ni_activated  ! num of activated ice nuclei
    real(rtype), intent(in) :: qv_supersat_i ! supersat wrt ice
    real(rtype), intent(in) :: qv_supersat_l ! supersat wrt liquid
    real(rtype), intent(in) :: inv_dt        ! inverse of dt (timestep)
-   real(rtype), intent(in) :: qi            ! cloud ice water mixing ratio (kg/kg)
    real(rtype), intent(in) :: qc            ! cloud water mixing ratio (kg/kg)
+   real(rtype), intent(in) :: qi            ! cloud ice water mixing ratio (kg/kg)
    real(rtype), intent(in) :: uzpl          ! vertical velocity (Pa/s)
-   logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN
+   real(rtype), intent(in) :: p_atm         ! pressure (Pa)
+   real(rtype), intent(in) :: cldi          ! cloud ice fraction
+   logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN, do_meyers
+   logical(btype), intent(in) :: do_new_bg_lp_frz, do_nucleate_ice_sc
 
    real(rtype), intent(inout) :: qinuc
    real(rtype), intent(inout) :: ni_nucleat_tend
@@ -2620,6 +2636,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    ! local variables
    real(rtype) :: dum, N_nuc, Q_nuc
    real(rtype) :: ndust, nsulf, qsmall, w, niimm, nidep, nihf, scrit ! for new BG code
+   logical(btype) :: do_ci_mohler_dep, do_lphom, no_limits
    real(rtype) :: wbar1, wbar2, deles, esi, A, B, regm, n1, tc ! work variables
 
    ! convert uzpl to w (Pa/s -> m/s)
@@ -2631,6 +2648,9 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    ! get value from utils
    nsulf = NumCirrusSulf
    ndust = NumCirrusINP
+   do_ci_mohler_dep = do_ci_mohler_dep_frz
+   do_lphom = do_lphom_frz
+   no_limits = no_limits_in
    
    !-------------------------------------------------------------------------------------
    ! Main ice nucleation code   
@@ -2640,14 +2660,14 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    !   3. Default/basic - meyers or cooper freezing                                                 
    !-------------------------------------------------------------------------------------
    
-   if ( do_new_bg_lp_freezing .eq. .false. ) then
+   if ( do_new_bg_lp_frz .eq. .false. ) then
    
       ! use new code from Blaz
       
       call nucleati_bg(w, t_atm, p_atm, qv_supersat_l+1._rtype, qv_supersat_i, &
-                    qc, qi, ni, inv_rho, nsulf, ndust,         &
-                    nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix,  & ! outputs
-                    wpice, weff, fhom ) ! outputs
+                    qc, qi, ni, inv_rho, nsulf, ndust, do_meyers,  &
+                    nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix,  & ! outputs bg
+                    wpice, weff, fhom) ! outputs bg
       
       N_nuc = max(0._rtype,nnuc*inv_dt) !pre-existing ice already accounted for
       !!!!! do we want nnuc_hom, etc. also to be divided by dt? before being output?
@@ -2657,23 +2677,23 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
          ni_nucleat_tend = N_nuc
       endif
       
-   else if ( do_nucleate_ice_sc .eq. .true. ) then
+   !else if ( do_nucleate_ice_sc .eq. .true. ) then
    
       ! use built-in lp scheme from SCREAM from nucleate_ice.F90
       ! ST modified to remove soot and extra aerosol info since we
       !    are not interested in making more complex aerosol scheme rn
       
-      call nucleati(w, t_atm, p_atm, qv_supersat_l+1._rtype, cldn, &
-                    qc, qi, ni, 1/inv_rho, nsulf, ndust,         &
-                    nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix,  & ! outputs
-                    wpice, weff, fhom ) ! outputs
+      ! call nucleati(w, t_atm, p_atm, qv_supersat_l+1._rtype, cldi, &
+      !              qc, qi, ni, 1/inv_rho, nsulf, ndust,         &
+      !              nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix,  & ! outputs sc
+      !              wpice, weff, fhom ) ! outputs sc
       
-      N_nuc = max(0._rtype,nnuc*inv_dt) !pre-existing ice already accounted for
-      if (N_nuc.ge.1.e-20_rtype) then
-         Q_nuc = max(0._rtype,N_nuc*mi0)
-         qinuc = Q_nuc
-         ni_nucleat_tend = N_nuc
-      endif
+      !N_nuc = max(0._rtype,nnuc*inv_dt) !pre-existing ice already accounted for
+      !if (N_nuc.ge.1.e-20_rtype) then
+      !   Q_nuc = max(0._rtype,N_nuc*mi0)
+      !   qinuc = Q_nuc
+      !   ni_nucleat_tend = N_nuc
+      !endif
    
    else
    
@@ -2684,7 +2704,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
          
             if ( do_meyers .eq. .true. ) then
                ! deposition/condensation nucleation in mixed clouds (Meyers, 1992)
-               dum = exp(-0.639_rtype+12.96_rtype.*qv_supersat_i) 
+               dum = exp(-0.639_rtype+12.96_rtype*qv_supersat_i) 
             else
                ! deposition/condensation nucleation in mixed clouds (Cooper 1986)
                dum = 0.005_rtype*exp(0.304_rtype*(T_zerodegc-t_atm))
@@ -2710,6 +2730,353 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    endif 
    
 end subroutine
+
+subroutine nucleati_bg(  &
+   wbar, tair, pmid, relhum, supersat_i,&
+   qc, qi, ni_pre, inv_rho,             &
+   so4_num, dst_num, do_meyers,         &
+   use_preexisting_ice, &
+   nuci, onihf, oniimm, onidep, onimix, &
+   wpice, weff, fhom )
+   
+
+   !---------------------------------------------------------------
+   ! Purpose:
+   !  The parameterization of ice nucleation.
+   !
+   ! Method: The current method is based on Liu & Penner (2005)
+   !  It related the ice nucleation with the aerosol number, temperature and the
+   !  updraft velocity. It includes homogeneous freezing of sulfate, immersion
+   !  freezing of dust, and Meyers et al. (1992) deposition nucleation
+   !
+   ! Authors: Xiaohong Liu, 01/2005, modifications by A. Gettelman 2009-2010,
+   !  modifications by S. Turbeville 2023
+   !----------------------------------------------------------------
+
+   ! Input Arguments
+   real(rtype), intent(in) :: wbar        ! grid cell mean vertical velocity (m/s)
+   real(rtype), intent(in) :: tair        ! temperature (K)
+   real(rtype), intent(in) :: pmid        ! pressure at layer midpoints (pa)
+   real(rtype), intent(in) :: relhum      ! relative humidity with respect to liquid
+   real(rtype), intent(in) :: supersat_i  ! supersaturation with respect to ice
+!   real(rtype), intent(in) :: cldn        ! new value of cloud fraction    (fraction)
+   real(rtype), intent(in) :: qc          ! liquid water mixing ratio (kg/kg)
+   real(rtype), intent(in) :: qi          ! ice mass mixing ratio (kg/kg)
+   real(rtype), intent(in) :: ni_pre      ! grid-mean preexisting cloud ice number conc (#/kg) 
+   real(rtype), intent(in) :: inv_rho     ! inverse rho (1 / air density (kg/m3))
+   real(rtype), intent(in) :: so4_num     ! so4 aerosol number (#/cm^3)
+   real(rtype), intent(in) :: dst_num     ! total dust aerosol number (#/cm^3)
+   logical,  intent(in)    :: do_meyers, use_preexisting_ice   ! meyers or cooper
+   
+   ! Output Arguments
+   real(rtype), intent(out) :: nuci       ! ice number nucleated (#/kg)
+   real(rtype), intent(out) :: onihf      ! nucleated number from homogeneous freezing of so4
+   real(rtype), intent(out) :: oniimm     ! nucleated number from immersion freezing
+   real(rtype), intent(out) :: onidep     ! nucleated number from deposition nucleation
+   real(rtype), intent(out) :: onimix     ! nucleated number from deposition nucleation  
+                                       !   (meyers: mixed phase)
+   real(rtype), intent(out) :: wpice      ! diagnosed Vertical velocity Reduction caused by 
+                                       !   preexisting ice (m/s), at Shom
+   real(rtype), intent(out) :: weff       ! effective Vertical velocity for ice nucleation (m/s);
+                                       !   weff=wbar-wpice
+   real(rtype), intent(out) :: fhom       ! how much fraction of cloud can reach Shom
+
+   ! Local workspace
+   real(rtype) :: nihf                    ! nucleated number from homogeneous freezing of so4
+   real(rtype) :: niimm                   ! nucleated number from immersion freezing
+   real(rtype) :: nidep                   ! nucleated number from deposition nucleation
+   real(rtype) :: nimix                   ! nucleated number from deposition nucleation (mixed phase)
+   real(rtype) :: nimoh                   ! nucleated number from cirrus deposition (Mohler 2006)
+   real(rtype) :: nilphf                  ! nucleated number from homogeneous freezing only (LP2005)
+   real(rtype) :: n1                      ! nucleated number
+   real(rtype) :: ni                      ! ni working var
+   real(rtype) :: qsmall                  ! min allowable cloud condensate to be considered cloud
+   real(rtype) :: tc, A, B, regm, dum     ! work variable
+   real(rtype) :: esl, esi, deles, scrit  ! work variable
+   real(rtype) :: wbar1, wbar2, ci, Shet, minweff       ! work variable for preexisting ice
+
+   ! used in SUBROUTINE Vpreice
+   real(rtype) :: Ni_preice        ! cloud ice number conc (1/m3)   
+   real(rtype) :: lami,Ri_preice   ! mean cloud ice radius (m)
+   real(rtype) :: Shom             ! initial ice saturation ratio; if <1, use hom threshold Si
+   real(rtype) :: detaT,RHimean    ! temperature standard deviation, mean cloudy RHi
+   real(rtype) :: wpicehet         ! diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at shet
+
+   real(rtype) :: weffhet    ! effective Vertical velocity for ice nucleation (m/s)  weff=wbar-wpicehet 
+   !-------------------------------------------------------------------------------
+
+   ! define work variables
+   tc = tair-273.15_rtype
+   qsmall = 1.e-14_rtype
+   ni = ni_pre
+   scrit = 0._rtype
+   
+   ! initialize ni values
+   nimix  = 0._rtype
+   nimoh   = 0._rtype
+   nilphf = 0._rtype
+   
+   ci     = 0.5236_rtype/inv_rho
+   Shet   = 0.2_rtype     ! het freezing threshold for supersat of ice
+   minweff= 0.001_r8 
+
+   
+   !---MIXED-PHASE--------------------------------------------------------------------------
+
+   if ( ( (tc.lt.-35._rtype) .and. (tc.ge.-37._rtype) .and. (supersat_i.ge.0.05_rtype)  .and. (qc.gt.qsmall) ) .or. &
+        ( (tc.lt.-32._rtype) .and. (tc.ge.-37._rtype) .and. (supersat_i.ge.0.005_rtype) .and. (qc.gt.qsmall) ) ) then 
+        
+        ! dep/cond-frzing for MIXED PHASE
+        ! following Cooper 1986 or Meyers 1992
+        
+        if ( do_meyers .eq. .true. ) then
+           ! deposition/condensation nucleation in mixed clouds (Meyers, 1992)
+           nimix = exp(-0.639_rtype+12.96_rtype*supersat_i)*1.e-3_rtype  ! cm-3
+        else
+           ! deposition/condensation nucleation in mixed clouds (Cooper 1986)
+           nimix = 0.005_rtype*exp(0.304_rtype*tc)*1.e-3_rtype ! cm-3
+        endif
+          
+   endif
+        
+   !---CIRRUS-MOHLER-----------------------------------------------------------------------
+   
+   if (do_ci_mohler_dep .eq. .true.) then
+   
+        ! deposition/condensation-freezing nucleation for CIRRUS
+        ! following Mohler et al., 2006 lab results for dust deposition freezing
+        ! this should be false when you allow HET frz in LP competition - WHY?
+         
+        if (tc.lt.-53._rtype) then 
+           scrit=0.1_rtype !critical supersaturation for T<-53degC
+        else
+           scrit=0.2_rtype
+        endif
+        
+        if ( (tc.lt.-37_rtype) .and. (supersat_i.ge.scrit) ) then
+           nimoh = dst_num ! #/cm3
+        endif 
+   endif ! mohler 
+   
+   !---LP-HOM----------------------------------------------------------------------------
+        
+   if (do_lphom .eq. .true.) then 
+         
+         ! HOM freezing only
+         ! following Liu & Penner, 2005 (LP2005)
+         
+         if ( (tc.lt.-37._rtype)  .and. (supersat_i.ge.0.42_rtype) ) then 
+            ! BG added some very conservative supi condition not to always go in that loop
+            call hf(tc, wbar1, relhum, so4_num, nilphf)
+         endif  
+      
+   endif ! do_lphom_ice_nucleation
+   
+   !---LP2005-HOM-HET-----------------------------------------------------------------------
+      
+   if ( do_new_bg_lp_frz .eq. .true. ) then
+      ! temp variables that depend on use_preexisting_ice
+      wbar1 = wbar
+      wbar2 = wbar
+
+      if (use_preexisting_ice) then
+
+         Ni_preice = ni/inv_rho                    ! (convert from #/kg -> #/m3)
+         !Ni_preice = Ni_preice / max(mincld,cldn)  ! in-cloud ice number density 
+
+!!== KZ_BUGFIX 
+         if (Ni_preice > 10.0_rtype .and. qi > 1.e-10_rtype ) then    ! > 0.01/L = 10/m3   
+!!== KZ_BUGFIX 
+            Shom = -1.5_rtype   ! if Shom<1 , Shom will be recalculated in SUBROUTINE Vpreice, according to Ren & McKenzie, 2005
+            lami = (6._rtype*ci*ni/qi)**(1._rtype/3._rtype)
+            Ri_preice = 0.5_rtype/lami                  ! radius
+            Ri_preice = max(Ri_preice, 1e-8_rtype)       ! >0.01micron
+            call Vpreice(pmid, tair, Ri_preice, Ni_preice, Shom, wpice)
+            call Vpreice(pmid, tair, Ri_preice, Ni_preice, Shet, wpicehet)
+         else
+            wpice    = 0.0_rtype
+            wpicehet = 0.0_rtype
+         endif
+
+         weff     = max(wbar-wpice, minweff)
+         wpice    = min(wpice, wbar)
+         weffhet  = max(wbar-wpicehet,minweff)
+         wpicehet = min(wpicehet, wbar)
+
+         wbar1 = weff
+         wbar2 = weffhet
+
+         detaT   = wbar/0.23_rtype
+         RHimean = 1.0_rtype
+         call frachom(tair, RHimean, detaT, fhom)
+
+      end if
+
+      ni = 0._rtype
+
+      ! initialize
+      niimm = 0._rtype
+      nidep = 0._rtype
+      nihf  = 0._rtype
+      deles = 0._rtype
+      esi   = 0._rtype
+   
+   
+      if ( (tc.le.-35._rtype) .and. (supersat_i.ge.Shet) .and. (wbar1.ge.1.e-6_rtype)  ) then 
+       
+         ! HET vs HOM competition
+         ! following LP2005
+         ! BG added wbar1 limit for num stability (log of small num problem) 
+
+         A = -1.4938_rtype * log(dst_num) + 12.884_rtype
+         B = -10.41_rtype  * log(dst_num) - 67.69_rtype
+
+         regm = A * log(wbar1) + B
+
+         if ( tc .gt. regm ) then
+       
+            ! heterogeneous nucleation only
+
+            if ( tc.lt.-40._rtype .and. wbar1.gt.1._rtype ) then 
+           
+               ! exclude T<-40 & W>1m/s from hetero. nucleation
+
+               call hf(tc,wbar1,relhum,so4_num,nihf)
+               niimm=0._rtype
+               nidep=0._rtype
+
+               if (use_preexisting_ice) then
+                  if (nihf.gt.1e-3_rtype) then ! hom occur,  add preexisting ice
+                     niimm=min(dst_num,Ni_preice*1e-6_rtype)       ! assuming dst_num freeze firstly
+                     nihf=nihf + Ni_preice*1e-6_rtype - niimm
+                  endif
+                  nihf=nihf*fhom
+                  n1=nihf+niimm 
+               else
+                  n1=nihf
+               end if
+
+            else
+
+               call hetero(tc,wbar2,dst_num,niimm,nidep)
+             
+               if (use_preexisting_ice) then
+                  if (niimm .gt. 1e-6_rtype) then ! het freezing occur, add preexisting ice
+                     niimm = niimm + Ni_preice*1e-6_rtype
+                     niimm = min(dst_num, niimm)        ! niimm < dst_num 
+                  end if
+               end if
+             
+               nihf=0._rtype
+               n1=niimm+nidep
+
+            endif
+
+         else if (tc.lt.regm-5._rtype) then
+       
+            ! homogeneous nucleation only
+
+            call hf(tc,wbar1,relhum,so4_num,nihf)
+            niimm=0._rtype
+            nidep=0._rtype
+
+            if (use_preexisting_ice) then
+               if (nihf.gt.1e-3_rtype) then !  hom occur,  add preexisting ice
+                  niimm=min(dst_num,Ni_preice*1e-6_rtype)       ! assuming dst_num freeze firstly
+                  nihf=nihf + Ni_preice*1e-6_rtype - niimm
+               endif
+               nihf=nihf*fhom
+               n1=nihf+niimm 
+            else
+               n1=nihf
+            end if
+
+         else
+       
+            ! transition between homogeneous and heterogeneous: interpolate in-between
+
+            if (tc.lt.-40._rtype .and. wbar1.gt.1._rtype) then 
+          
+               ! exclude T<-40 & W>1m/s from hetero. nucleation
+
+               call hf(tc, wbar1, relhum, so4_num, nihf)
+               niimm = 0._rtype
+               nidep = 0._rtype
+
+               if (use_preexisting_ice) then
+                  if (nihf .gt. 1e-3_rtype) then ! hom occur,  add preexisting ice
+                     niimm = min(dst_num, Ni_preice*1e-6_rtype)       ! assuming dst_num freeze firstly
+                     nihf  = nihf + Ni_preice*1e-6_rtype - niimm
+                  endif
+                  nihf = nihf*fhom
+                  n1   = nihf + niimm
+               else
+                  n1 = nihf
+               end if
+
+            else
+          
+               ! hetero. and homog. nucleation compete
+
+               call hf(regm-5._rtype,wbar1,relhum,so4_num,nihf)
+               call hetero(regm,wbar2,dst_num,niimm,nidep)
+
+               if (use_preexisting_ice) then
+                  nihf = nihf*fhom
+               end if
+
+               if (nihf .le. (niimm+nidep)) then
+                  n1 = nihf
+               else
+                  n1=(niimm+nidep)*((niimm+nidep)/nihf)**((tc-regm)/5._rtype)
+               endif
+
+               if (use_preexisting_ice) then
+                  if (n1 .gt. 1e-3_rtype) then   ! add preexisting ice
+                     n1    = n1 + Ni_preice*1e-6_rtype
+                     niimm = min(dst_num, n1)  ! assuming all dst_num freezing earlier than hom  !!
+                     nihf  = n1 - niimm
+                  else
+                     n1    = 0._rtype
+                     niimm = 0._rtype
+                     nihf  = 0._rtype                         
+                  endif
+               end if
+            end if
+         end if ! regimes for hom, het, hom vs het
+
+         ni = n1
+
+      end if ! temp, supersat_i, wbar1 thresholding
+   end if ! new_bg_lp_frz
+
+   !---end----------------------------------------------------
+
+   ! impose limits
+   if ( no_limits .eq. .true.) then
+      nimix = min(nimix,150.e+3_rtype) !BG increased max limit from 100 to 150/L
+      nimoh = min(nimoh,100.e+3_rtype) !max to 100/L
+      nilphf = min(nilphf,80.e+6_rtype)!max to 80,000/L
+      ni = min(ni,80.e+6_rtype)        !max to 80,000/L
+   endif
+   
+   nuci=ni+nimix+nimoh+nilphf
+   
+   if ( (nuci.gt.9999._rtype) .or. (nuci.lt.0._rtype) ) then
+      write(iulog, *) 'Warning: incorrect ice nucleation number (nuci reset =0)'
+      write(iulog, *) ni, tair, relhum, wbar, nihf, niimm, nidep,deles,esi,dst_num,so4_num
+      nuci=0._rtype
+   endif
+   
+
+   ! change unit from #/cm3 to #/kg
+   nuci   = nuci*1.e+6_rtype*inv_rho
+   onimix = nimix*1.e+6_rtype*inv_rho
+   onidep = (nidep+nimoh)*1.e+6_rtype*inv_rho
+   oniimm = niimm*1.e+6_rtype*inv_rho
+   onihf  = (nihf+nilphf)*1.e+6_rtype*inv_rho
+
+end subroutine nucleati_bg
 
 !BG added homo freezing by Liu and Penner, 2005
 !===============================================================================
@@ -2832,6 +3199,385 @@ subroutine hetero(tc,ww,Ns,Nis,Nid)
       Nid = 0.0_rtype    ! don't include deposition nucleation for cirrus clouds when T<-37C
       ! BG we assume the current het freezing represents in some sense both het by imm and depo
 end subroutine hetero
+
+
+!===============================================================================
+! subroutine Vpreice and fhom are from nucleate_ice.f90 for dealing with
+!  pre-existing ice and calculating the approx fraction of cirrus that 
+!  arose from homogeneous freezing
+
+subroutine Vpreice(P_in, T_in, R_in, C_in, S_in, V_out)
+
+   !  based on  Karcher et al. (2006)
+   !  VERTICAL VELOCITY CALCULATED FROM DEPOSITIONAL LOSS TERM
+
+   ! SUBROUTINE arguments
+   real(rtype), INTENT(in)  :: P_in       ! [Pa],INITIAL AIR pressure 
+   real(rtype), INTENT(in)  :: T_in       ! [K] ,INITIAL AIR temperature 
+   real(rtype), INTENT(in)  :: R_in       ! [m],INITIAL MEAN  ICE CRYSTAL NUMBER RADIUS 
+   real(rtype), INTENT(in)  :: C_in       ! [m-3],INITIAL TOTAL ICE CRYSTAL NUMBER DENSITY, [1/cm3]
+   real(rtype), INTENT(in)  :: S_in       ! [-],INITIAL ICE SATURATION RATIO;; if <1, use hom threshold Si 
+   real(rtype), INTENT(out) :: V_out      ! [m/s], VERTICAL VELOCITY REDUCTION (caused by preexisting ice)
+
+   ! SUBROUTINE parameters
+   real(rtype), PARAMETER :: ALPHAc  = 0.5_rtype ! density of ice (g/cm3), !!!V is not related to ALPHAc 
+   real(rtype), PARAMETER :: FA1c    = 0.601272523_rtype        
+   real(rtype), PARAMETER :: FA2c    = 0.000342181855_rtype
+   real(rtype), PARAMETER :: FA3c    = 1.49236645E-12_rtype        
+   real(rtype), PARAMETER :: WVP1c   = 3.6E+10_rtype   
+   real(rtype), PARAMETER :: WVP2c   = 6145.0_rtype
+   real(rtype), PARAMETER :: FVTHc   = 11713803.0_rtype
+   real(rtype), PARAMETER :: THOUBKc = 7.24637701E+18_rtype
+   real(rtype), PARAMETER :: SVOLc   = 3.23E-23_rtype    ! SVOL=XMW/RHOICE
+   real(rtype), PARAMETER :: FDc     = 249.239822_rtype
+   real(rtype), PARAMETER :: FPIVOLc = 3.89051704E+23_rtype         
+   real(rtype) :: T,P,S,R,C
+   real(rtype) :: A1,A2,A3,B1,B2
+   real(rtype) :: T_1,PICE,FLUX,ALP4,CISAT,DLOSS,VICE
+
+   T = T_in          ! K  , K
+   P = P_in*1e-2_rtype  ! Pa , hpa
+
+   IF (S_in.LT.1.0_rtype) THEN
+      S = 2.349_rtype - (T/259.0_rtype) ! homogeneous freezing threshold, according to Ren & McKenzie, 2005
+   ELSE
+      S = S_in                    ! INPUT ICE SATURATION RATIO, -,  >1
+   ENDIF
+
+   R     = R_in*1e2_rtype   ! m  => cm
+   C     = C_in*1e-6_rtype  ! m-3 => cm-3
+   T_1   = 1.0_rtype/ T
+   PICE  = WVP1c * EXP(-(WVP2c*T_1))
+   ALP4  = 0.25_rtype * ALPHAc      
+   FLUX  = ALP4 * SQRT(FVTHc*T)
+   CISAT = THOUBKc * PICE * T_1   
+   A1    = ( FA1c * T_1 - FA2c ) * T_1 
+   A2    = 1.0_rtype/ CISAT      
+   A3    = FA3c * T_1 / P
+   B1    = FLUX * SVOLc * CISAT * ( S-1.0_rtype ) 
+   B2    = FLUX * FDc * P * T_1**1.94_rtype 
+   DLOSS = FPIVOLc * C * B1 * R**2 / ( 1.0_rtype+ B2 * R )         
+   VICE  = ( A2 + A3 * S ) * DLOSS / ( A1 * S )  ! 2006,(19)
+   V_out = VICE*1e-2_rtype  ! cm/s => m/s
+
+end subroutine Vpreice
+
+subroutine frachom(Tmean,RHimean,detaT,fhom)
+   ! How much fraction of cirrus might reach Shom  
+   ! base on "A cirrus cloud scheme for general circulation models",
+   ! B. Karcher and U. Burkhardt 2008
+
+   real(rtype), intent(in)  :: Tmean, RHimean, detaT
+   real(rtype), intent(out) :: fhom
+
+   real(rtype), parameter :: seta = 6132.9_rtype  ! K
+   integer,  parameter :: Nbin=200          ! (Tmean - 3*detaT, Tmean + 3*detaT)
+
+   real(rtype) :: PDF_T(Nbin)    ! temperature PDF;  ! PDF_T=0  outside (Tmean-3*detaT, Tmean+3*detaT)
+   real(rtype) :: Sbin(Nbin)     ! the fluctuations of Si that are driven by the T variations 
+   real(rtype) :: Sihom, deta
+   integer  :: i
+
+   Sihom = 2.349_rtype-Tmean/259.0_rtype   ! homogeneous freezing threshold, according to Ren & McKenzie, 2005
+   fhom  = 0.0_rtype
+
+   do i = Nbin, 1, -1
+
+      deta     = (i - 0.5_rtype - Nbin/2)*6.0_rtype/Nbin   ! PDF_T=0  outside (Tmean-3*detaT, Tmean+3*detaT)
+      Sbin(i)  = RHimean*exp(deta*detaT*seta/Tmean**2.0_rtype)
+      PDF_T(i) = exp(-deta**2.0_rtype/2.0_rtype)*6.0_rtype/(sqrt(2.0_rtype*Pi)*Nbin)
+      
+
+      if (Sbin(i).ge.Sihom) then
+         fhom = fhom + PDF_T(i)
+      else
+         exit
+      end if
+   end do
+
+   fhom=fhom/0.997_rtype   ! accounting for the finite limits (-3 , 3)
+
+end subroutine frachom
+
+
+! From nucleate_ice.f90
+! Authors:
+!  Xiaohong Liu, 01/2005, modifications by A. Gettelman 2009-2010
+!  Xiangjun Shi & Xiaohong Liu, 01/2014.
+!
+!  With help from C. C. Chen and B. Eaton (2014)
+
+! subroutine nucleati(  &
+!    wbar, tair, pmid, relhum, cldn,      &
+!    qc, qi, ni_in, rhoair,               &
+!    so4_num, dst_num, use_preexisting_ice,  &
+!    nuci, onihf, oniimm, onidep, onimey, &
+!    wpice, weff, fhom )
+!
+!
+!    !---------------------------------------------------------------
+!    ! Purpose:
+!    !  The parameterization of ice nucleation.
+!    !
+!    ! Method: The current method is based on Liu & Penner (2005)
+!    !  It related the ice nucleation with the aerosol number, temperature and the
+!    !  updraft velocity. It includes homogeneous freezing of sulfate, immersion
+!    !  freezing of dust, and Meyers et al. (1992) deposition nucleation
+!    !
+!    ! Authors: Xiaohong Liu, 01/2005, modifications by A. Gettelman 2009-2010,
+!    !  modifications by S. Turbeville 2023
+!    !----------------------------------------------------------------
+!
+!    ! Input Arguments
+!    real(rtype), intent(in) :: wbar        ! grid cell mean vertical velocity (m/s)
+!    real(rtype), intent(in) :: tair        ! temperature (K)
+!    real(rtype), intent(in) :: pmid        ! pressure at layer midpoints (pa)
+!    real(rtype), intent(in) :: relhum      ! relative humidity with respective to liquid
+!    real(rtype), intent(in) :: cldn        ! new value of cloud fraction    (fraction)
+!    real(rtype), intent(in) :: qc          ! liquid water mixing ratio (kg/kg)
+!    real(rtype), intent(in) :: qi          ! grid-mean preexisting cloud ice mass mixing ratio (kg/kg)
+!    real(rtype), intent(in) :: ni_in       ! grid-mean preexisting cloud ice number conc (#/kg)
+!    real(rtype), intent(in) :: rhoair      ! air density (kg/m3)
+!    real(rtype), intent(in) :: so4_num     ! so4 aerosol number (#/cm^3)
+!    real(rtype), intent(in) :: dst_num     ! total dust aerosol number (#/cm^3)
+!    logical,     intent(in) :: use_preexisting_ice
+!
+!    ! Output Arguments
+!    real(rtype), intent(out) :: nuci       ! ice number nucleated (#/kg)
+!    real(rtype), intent(out) :: onihf      ! nucleated number from homogeneous freezing of so4
+!    real(rtype), intent(out) :: oniimm     ! nucleated number from immersion freezing
+!    real(rtype), intent(out) :: onidep     ! nucleated number from deposition nucleation
+!    real(rtype), intent(out) :: onimey     ! nucleated number from deposition nucleation
+!                                        !   (meyers: mixed phase)
+!    real(rtype), intent(out) :: wpice      ! diagnosed Vertical velocity Reduction caused by
+!                                        !   preexisting ice (m/s), at Shom
+!    real(rtype), intent(out) :: weff       ! effective Vertical velocity for ice nucleation (m/s);
+!                                        !   weff=wbar-wpice
+!    real(rtype), intent(out) :: fhom       ! how much fraction of cloud can reach Shom
+!
+!    ! Local workspace
+!    real(rtype) :: nihf                      ! nucleated number from homogeneous freezing of so4
+!    real(rtype) :: niimm                     ! nucleated number from immersion freezing
+!    real(rtype) :: nidep                     ! nucleated number from deposition nucleation
+!    real(rtype) :: nimey                     ! nucleated number from deposition nucleation (meyers)
+!    real(rtype) :: n1, ni                    ! nucleated number
+!    real(rtype) :: tc, A, B, regm            ! work variable
+!    real(rtype) :: esl, esi, deles           ! work variable
+!
+!    real(rtype)  :: wbar1, wbar2
+!
+!    ! used in SUBROUTINE Vpreice
+!    real(rtype) :: Ni_preice        ! cloud ice number conc (1/m3)
+!    real(rtype) :: lami,Ri_preice   ! mean cloud ice radius (m)
+!    real(rtype) :: Shom             ! initial ice saturation ratio; if <1, use hom threshold Si
+!    real(rtype) :: detaT,RHimean    ! temperature standard deviation, mean cloudy RHi
+!    real(rtype) :: wpicehet   ! diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at shet
+!
+!    real(rtype) :: weffhet    ! effective Vertical velocity for ice nucleation (m/s)  weff=wbar-wpicehet
+!    !-------------------------------------------------------------------------------
+!
+!    ! temp variables that depend on use_preexisting_ice
+!    wbar1 = wbar
+!    wbar2 = wbar
+!
+!    if (use_preexisting_ice) then
+!
+!       Ni_preice = ni_in*rhoair                    ! (convert from #/kg -> #/m3)
+!       Ni_preice = Ni_preice / max(mincld,cldn)   ! in-cloud ice number density
+!
+! !!== KZ_BUGFIX
+!       if (Ni_preice > 10.0_rtype .and. qi > 1.e-10_rtype ) then    ! > 0.01/L = 10/m3
+! !!== KZ_BUGFIX
+!          Shom = -1.5_rtype   ! if Shom<1 , Shom will be recalculated in SUBROUTINE Vpreice, according to Ren & McKenzie, 2005
+!          lami = (gamma4*ci*ni_in/qi)**(1._rtype/3._rtype)
+!          Ri_preice = 0.5_rtype/lami                  ! radius
+!          Ri_preice = max(Ri_preice, 1e-8_rtype)       ! >0.01micron
+!          call Vpreice(pmid, tair, Ri_preice, Ni_preice, Shom, wpice)
+!          call Vpreice(pmid, tair, Ri_preice, Ni_preice, Shet, wpicehet)
+!       else
+!          wpice    = 0.0_rtype
+!          wpicehet = 0.0_rtype
+!       endif
+!
+!       weff     = max(wbar-wpice, minweff)
+!       wpice    = min(wpice, wbar)
+!       weffhet  = max(wbar-wpicehet,minweff)
+!       wpicehet = min(wpicehet, wbar)
+!
+!       wbar1 = weff
+!       wbar2 = weffhet
+!
+!       detaT   = wbar/0.23_rtype
+!       RHimean = 1.0_rtype
+!       call frachom(tair, RHimean, detaT, fhom)
+!
+!    end if
+!
+!    ni = 0._rtype
+!    tc = tair - 273.15_rtype
+!
+!    ! initialize
+!    niimm = 0._rtype
+!    nidep = 0._rtype
+!    nihf  = 0._rtype
+!    deles = 0._rtype
+!    esi   = 0._rtype
+!
+!    if(so4_num >= 1.0e-10_rtype .and. cldn > 0._rtype) then
+!    ! so4_num = 20 /L is hardcoded in micro_p3_utils.f90
+!
+! #ifdef USE_XLIU_MOD
+! !++ Mod from Xiaohong is the following two line conditional.
+! !   It changes answers so needs climate validation.
+!       if ((relhum*svp_water(tair)/svp_ice(tair)*subgrid).ge.1.2_rtype) then
+!          if ( ((tc.le.0.0_rtype).and.(tc.ge.-37.0_rtype).and.(qc.lt.1.e-12_rtype)).or.(tc.le.-37.0_rtype)) then
+! #else
+!       if((tc.le.-35.0_rtype) .and. ((relhum*svp_water(tair)/svp_ice(tair)*subgrid).ge.1.2_rtype)) then ! use higher RHi threshold
+! #endif
+!
+!             A = -1.4938_rtype * log(dst_num) + 12.884_rtype
+!             B = -10.41_rtype  * log(dst_num) - 67.69_rtype
+!
+!             regm = A * log(wbar1) + B
+!
+!             ! heterogeneous nucleation only
+!             if (tc .gt. regm) then
+!
+!                if(tc.lt.-40._rtype .and. wbar1.gt.1._rtype) then ! exclude T<-40 & W>1m/s from hetero. nucleation
+!
+!                   call hf(tc,wbar1,relhum,so4_num,nihf)
+!                   niimm=0._rtype
+!                   nidep=0._rtype
+!
+!                   if (use_preexisting_ice) then
+!                      if (nihf.gt.1e-3_rtype) then ! hom occur,  add preexisting ice
+!                         niimm=min(dst_num,Ni_preice*1e-6_rtype)       ! assuming dst_num freeze firstly
+!                         nihf=nihf + Ni_preice*1e-6_rtype - niimm
+!                      endif
+!                      nihf=nihf*fhom
+!                      n1=nihf+niimm
+!                   else
+!                      n1=nihf
+!                   end if
+!
+!                else
+!
+!                   call hetero(tc,wbar2,dst_num,niimm,nidep)
+!                   if (use_preexisting_ice) then
+!                      if (niimm .gt. 1e-6_rtype) then ! het freezing occur, add preexisting ice
+!                         niimm = niimm + Ni_preice*1e-6_rtype
+!                         niimm = min(dst_num, niimm)        ! niimm < dst_num
+!                      end if
+!                   end if
+!                   nihf=0._rtype
+!                   n1=niimm+nidep
+!
+!                endif
+!
+!             ! homogeneous nucleation only
+!             else if (tc.lt.regm-5._rtype) then
+!
+!                call hf(tc,wbar1,relhum,so4_num,nihf)
+!                niimm=0._rtype
+!                nidep=0._rtype
+!
+!                if (use_preexisting_ice) then
+!                   if (nihf.gt.1e-3_rtype) then !  hom occur,  add preexisting ice
+!                      niimm=min(dst_num,Ni_preice*1e-6_rtype)       ! assuming dst_num freeze firstly
+!                      nihf=nihf + Ni_preice*1e-6_rtype - niimm
+!                   endif
+!                   nihf=nihf*fhom
+!                   n1=nihf+niimm
+!                else
+!                   n1=nihf
+!                end if
+!
+!             ! transition between homogeneous and heterogeneous: interpolate in-between
+!             else
+!
+!                if (tc.lt.-40._rtype .and. wbar1.gt.1._rtype) then ! exclude T<-40 & W>1m/s from hetero. nucleation
+!
+!                   call hf(tc, wbar1, relhum, so4_num, nihf)
+!                   niimm = 0._rtype
+!                   nidep = 0._rtype
+!
+!                   if (use_preexisting_ice) then
+!                      if (nihf .gt. 1e-3_rtype) then ! hom occur,  add preexisting ice
+!                         niimm = min(dst_num, Ni_preice*1e-6_rtype)       ! assuming dst_num freeze firstly
+!                         nihf  = nihf + Ni_preice*1e-6_rtype - niimm
+!                      endif
+!                      nihf = nihf*fhom
+!                      n1   = nihf + niimm
+!                   else
+!                      n1 = nihf
+!                   end if
+!
+!                else
+!
+!                   call hf(regm-5._rtype,wbar1,relhum,so4_num,nihf)
+!                   call hetero(regm,wbar2,dst_num,niimm,nidep)
+!
+!                   if (use_preexisting_ice) then
+!                      nihf = nihf*fhom
+!                   end if
+!
+!                   if (nihf .le. (niimm+nidep)) then
+!                      n1 = nihf
+!                   else
+!                      n1=(niimm+nidep)*((niimm+nidep)/nihf)**((tc-regm)/5._rtype)
+!                   endif
+!
+!                   if (use_preexisting_ice) then
+!                      if (n1 .gt. 1e-3_rtype) then   ! add preexisting ice
+!                         n1    = n1 + Ni_preice*1e-6_rtype
+!                         niimm = min(dst_num, n1)  ! assuming all dst_num freezing earlier than hom  !!
+!                         nihf  = n1 - niimm
+!                      else
+!                         n1    = 0._rtype
+!                         niimm = 0._rtype
+!                         nihf  = 0._rtype
+!                      endif
+!                   end if
+!
+!                end if
+!             end if
+!
+!             ni = n1
+!
+!          end if
+!       end if
+! #ifdef USE_XLIU_MOD
+!    end if
+! #endif
+!
+!
+!    ! deposition/condensation nucleation in mixed clouds (-37<T<0C) (Meyers, 1992)
+!    if(tc.lt.0._rtype .and. tc.gt.-37._rtype .and. qc.gt.1.e-12_rtype) then
+!          !--iceMP
+!          esl = svp_water(tair)     ! over water in mixed clouds
+!          esi = svp_ice(tair)     ! over ice
+!          deles = (esl - esi)
+!          nimey=1.e-3_rtype*exp(12.96_rtype*deles/esi - 0.639_rtype)
+!    else
+!       nimey=0._rtype
+!    endif
+!
+!    if (use_hetfrz_classnuc) nimey = 0._rtype
+!
+!    nuci=ni+nimey
+!    if(nuci.gt.9999._rtype.or.nuci.lt.0._rtype) then
+!       write(iulog, *) 'Warning: incorrect ice nucleation number (nuci reset =0)'
+!       write(iulog, *) ni, tair, relhum, wbar, nihf, niimm, nidep,deles,esi,dst_num,so4_num
+!       nuci=0._rtype
+!    endif
+!
+!    nuci   = nuci*1.e+6_rtype/rhoair    ! change unit from #/cm3 to #/kg
+!    onimey = nimey*1.e+6_rtype/rhoair
+!    onidep = nidep*1.e+6_rtype/rhoair
+!    oniimm = niimm*1.e+6_rtype/rhoair
+!    onihf  = nihf*1.e+6_rtype/rhoair
+!
+! end subroutine nucleati
 
 subroutine droplet_self_collection(rho,inv_rho,qc_incld,mu_c,nu,nc2nr_autoconv_tend,    &
    nc_selfcollect_tend)
