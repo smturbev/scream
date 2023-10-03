@@ -1150,8 +1150,6 @@ end subroutine micro_p3_readnl
          do_prescribed_CCN,           & ! IN
          do_meyers,                   & ! IN     .false.=default cooper frzing, else meyers
          do_new_bg_lp_frz,            & ! IN - use nucleate_ice_bg.f90
-         do_nucleate_ice_sc,          & ! IN - use nucleate_ice.f90
-         use_preexisting_ice,         & ! IN - for nucleati/nucleati_bg
          dep_scaling_small,           & ! IN     scaling factor for vapor deposition on small ice particles
          sed_scaling_small,           & ! IN     scaling factor for ice sedimentation on small ice particles
          state%omega(its:ite,kts:kte),& ! IN  vertical veloctiy, omega            Pa/s

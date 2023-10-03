@@ -56,7 +56,7 @@ module micro_p3
        lookup_table_1a_dum1_c, &
        p3_qc_autocon_expon, p3_qc_accret_expon, &
        NumCirrusSulf, NumCirrusINP, & ! added for new ice_nucleation -ST
-       do_ci_mohler_dep_frz, do_lphom_frz, no_limits_in, & ! added for new_ice_nucleation -ST
+       DoCiMohlerDep, DoLPHom, NoLimits, use_preexisting_ice_in, & ! added for new_ice_nucleation -ST
        mi25, mi35 ! added for vapor dep scaling -ST
    use wv_sat_scream, only:qv_sat
    use wv_saturation, only: svp_water, svp_ice
@@ -467,7 +467,7 @@ contains
   END SUBROUTINE p3_main_part1
 
   SUBROUTINE p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
-       do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, dep_scaling_small, & ! added for ice_deposition_sublimation -ST 
+       do_meyers, do_new_bg_lp_frz, dep_scaling_small, & ! added for ice_deposition_sublimation -ST 
        dt, inv_dt, pres, inv_exner, inv_cld_frac_l, inv_cld_frac_i, inv_cld_frac_r, ni_activated, &
        inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl, & 
        t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_l, qv_supersat_i, rhofaci, acn, qv, th_atm, qc, nc, qr, nr, qi, ni, &
@@ -482,7 +482,7 @@ contains
     ! args
 
     integer, intent(in) :: kts, kte, kbot, ktop, kdir
-    logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice
+    logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz
     real(rtype), intent(in) :: dt, inv_dt, dep_scaling_small
 
     real(rtype), intent(in), dimension(kts:kte) :: pres, inv_exner, inv_cld_frac_l,  &
@@ -773,7 +773,7 @@ contains
            ni(k),ni_activated(k),qv_supersat_l(k),qv_supersat_i(k), &
            inv_dt,qc(k),qi(k),uzpl(k),pres(k), cld_frac_i(k), &
            do_predict_nc, do_prescribed_CCN, do_meyers,  &
-           do_new_bg_lp_frz, do_nucleate_ice_sc, &
+           do_new_bg_lp_frz, &
            qinuc, ni_nucleat_tend,  &
            nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix, wpice, weff, fhom)
 
@@ -1148,7 +1148,7 @@ contains
 
   SUBROUTINE p3_main(qc,nc,qr,nr,th_atm,qv,dt,qi,qm,ni,bm,   &
        pres,dz,nc_nuceat_tend,nccn_prescribed,ni_activated,inv_qc_relvar,it,precip_liq_surf,precip_ice_surf,its,ite,kts,kte,diag_eff_radius_qc,     &
-       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, dep_scaling_small, sed_scaling_small, uzpl, &
+       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, dep_scaling_small, sed_scaling_small, uzpl, &
        dpres,inv_exner,qv2qi_depos_tend,precip_total_tend,nevapr,qr_evap_tend,precip_liq_flux,precip_ice_flux,cld_frac_r,cld_frac_l,cld_frac_i,  &
        p3_tend_out,mu_c,lamc,liq_ice_exchange,vap_liq_exchange, &
        vap_ice_exchange,qv_prev,t_prev,col_location &
@@ -1224,7 +1224,7 @@ contains
     real(rtype), intent(out),   dimension(its:ite,kts:kte)      :: vap_ice_exchange ! sum of vap-ice phase change tendenices
 
     ! INPUT for prescribed ice nucleation options
-    logical(btype), intent(in)                                  :: do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice
+    logical(btype), intent(in)                                  :: do_prescribed_CCN, do_meyers, do_new_bg_lp_frz
     
     ! INPUT for scaling factor in ice vapor deposition & sedimentation -ST
     ! set in micro_p3_interface.F90
@@ -1399,7 +1399,7 @@ contains
        if (.not. (is_nucleat_possible .or. is_hydromet_present)) goto 333
 
        call p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
-            do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, dep_scaling_small, &
+            do_meyers, do_new_bg_lp_frz, dep_scaling_small, &
             dt, inv_dt, &
             pres(i,:), inv_exner(i,:), &
             inv_cld_frac_l(i,:), inv_cld_frac_i(i,:), inv_cld_frac_r(i,:), ni_activated(i,:), inv_qc_relvar(i,:), &
@@ -2601,7 +2601,7 @@ end subroutine rain_immersion_freezing
 
 
 subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_supersat_i, inv_dt, &
-   qc, qi, uzpl, p_atm, cldi, do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, do_nucleate_ice_sc, &
+   qc, qi, uzpl, p_atm, cldi, do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, &
    qinuc, ni_nucleat_tend, nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix, wpice, weff, fhom)
    
 
@@ -2625,7 +2625,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    real(rtype), intent(in) :: p_atm         ! pressure (Pa)
    real(rtype), intent(in) :: cldi          ! cloud ice fraction
    logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN, do_meyers
-   logical(btype), intent(in) :: do_new_bg_lp_frz, do_nucleate_ice_sc
+   logical(btype), intent(in) :: do_new_bg_lp_frz
 
    real(rtype), intent(inout) :: qinuc
    real(rtype), intent(inout) :: ni_nucleat_tend
@@ -2648,9 +2648,9 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    ! get value from utils
    nsulf = NumCirrusSulf
    ndust = NumCirrusINP
-   do_ci_mohler_dep = do_ci_mohler_dep_frz
-   do_lphom = do_lphom_frz
-   no_limits = no_limits_in
+   do_ci_mohler_dep = DoCiMohlerDep
+   do_lphom = DoLPHom
+   no_limits = NoLimits
    
    !-------------------------------------------------------------------------------------
    ! Main ice nucleation code   
@@ -2665,7 +2665,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
       ! use new code from Blaz
       
       call nucleati_bg(w, t_atm, p_atm, qv_supersat_l+1._rtype, qv_supersat_i, &
-                    qc, qi, ni, inv_rho, nsulf, ndust, do_meyers,  &
+                    qc, qi, ni, inv_rho, nsulf, ndust, do_meyers,  do_new_bg_lp_frz, &
                     nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix,  & ! outputs bg
                     wpice, weff, fhom) ! outputs bg
       
@@ -2734,11 +2734,9 @@ end subroutine
 subroutine nucleati_bg(  &
    wbar, tair, pmid, relhum, supersat_i,&
    qc, qi, ni_pre, inv_rho,             &
-   so4_num, dst_num, do_meyers,         &
-   use_preexisting_ice, &
+   so4_num, dst_num, do_meyers, do_new_bg_lp_frz,  &
    nuci, onihf, oniimm, onidep, onimix, &
    wpice, weff, fhom )
-   
 
    !---------------------------------------------------------------
    ! Purpose:
@@ -2766,7 +2764,8 @@ subroutine nucleati_bg(  &
    real(rtype), intent(in) :: inv_rho     ! inverse rho (1 / air density (kg/m3))
    real(rtype), intent(in) :: so4_num     ! so4 aerosol number (#/cm^3)
    real(rtype), intent(in) :: dst_num     ! total dust aerosol number (#/cm^3)
-   logical,  intent(in)    :: do_meyers, use_preexisting_ice   ! meyers or cooper
+   logical,  intent(in)    :: do_meyers   ! meyers or cooper
+   logical,  intent(in)    :: do_new_bg_lp_frz ! do the new scheme from blaz using LP2005
    
    ! Output Arguments
    real(rtype), intent(out) :: nuci       ! ice number nucleated (#/kg)
@@ -2802,7 +2801,12 @@ subroutine nucleati_bg(  &
    real(rtype) :: detaT,RHimean    ! temperature standard deviation, mean cloudy RHi
    real(rtype) :: wpicehet         ! diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at shet
 
-   real(rtype) :: weffhet    ! effective Vertical velocity for ice nucleation (m/s)  weff=wbar-wpicehet 
+   real(rtype) :: weffhet   ! effective Vertical velocity for ice nucleation (m/s)  weff=wbar-wpicehet 
+   logical(btype) :: use_preexisting_ice
+   logical(btype) :: do_ci_mohler_dep
+   logical(btype) :: do_lphom
+   logical(btype) :: no_limits
+   
    !-------------------------------------------------------------------------------
 
    ! define work variables
@@ -2818,8 +2822,11 @@ subroutine nucleati_bg(  &
    
    ci     = 0.5236_rtype/inv_rho
    Shet   = 0.2_rtype     ! het freezing threshold for supersat of ice
-   minweff= 0.001_r8 
-
+   minweff= 0.001_rtype 
+   
+   use_preexisting_ice = use_preexisting_ice_in
+   do_ci_mohler_dep = DoCiMohlerDep
+   do_lphom = DoLPHom   
    
    !---MIXED-PHASE--------------------------------------------------------------------------
 
@@ -2931,7 +2938,8 @@ subroutine nucleati_bg(  &
          A = -1.4938_rtype * log(dst_num) + 12.884_rtype
          B = -10.41_rtype  * log(dst_num) - 67.69_rtype
 
-         regm = A * log(wbar1) + B
+         regm = 0.8 * A * log(wbar1) + B ! Added 0.8 scaling factor per Blaz's suggestion 
+                                         !  to make more realistic (like Karcher 2022)
 
          if ( tc .gt. regm ) then
        
