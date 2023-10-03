@@ -56,7 +56,7 @@ module micro_p3
        lookup_table_1a_dum1_c, &
        p3_qc_autocon_expon, p3_qc_accret_expon, &
        NumCirrusSulf, NumCirrusINP, & ! added for new ice_nucleation -ST
-       DoCiMohlerDep, DoLPHom, NoLimits, NoHetIceNuc, use_preexisting_ice_in, & ! added for new_ice_nucleation -ST
+       DoCiMohlerDep, DoLPHom, NoLimits, NoHetIceNuc,euse_preexisting_ice_in, & ! added for new_ice_nucleation -ST
        mi25, mi35 ! added for vapor dep scaling -ST
    use wv_sat_scream, only:qv_sat
    use wv_saturation, only: svp_water, svp_ice
@@ -2944,8 +2944,8 @@ subroutine nucleati_bg(  &
          A = -1.4938_rtype * log(dst_num) + 12.884_rtype
          B = -10.41_rtype  * log(dst_num) - 67.69_rtype
 
-         regm = 0.8 * A * log(wbar1) + B ! Added 0.8 scaling factor per Blaz's suggestion 
-                                         !  to make more realistic (like Karcher 2022)
+         regm = A * log(wbar1) + B ! Blaz' found that a factor of 0.8 in this regm term 
+                                   !  makes LP more more realistic like Karcher 2022
 
          if ( tc .gt. regm ) then
        
