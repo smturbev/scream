@@ -56,7 +56,7 @@ module micro_p3
        lookup_table_1a_dum1_c, &
        p3_qc_autocon_expon, p3_qc_accret_expon, &
        NumCirrusSulf, NumCirrusINP, & ! added for new ice_nucleation -ST
-       DoCiMohlerDep, DoLPHom, NoLimits, use_preexisting_ice_in, & ! added for new_ice_nucleation -ST
+       DoCiMohlerDep, DoLPHom, NoLimits, NoHetIceNuc, use_preexisting_ice_in, & ! added for new_ice_nucleation -ST
        mi25, mi35 ! added for vapor dep scaling -ST
    use wv_sat_scream, only:qv_sat
    use wv_saturation, only: svp_water, svp_ice
@@ -2806,7 +2806,8 @@ subroutine nucleati_bg(  &
    logical(btype) :: do_ci_mohler_dep
    logical(btype) :: do_lphom
    logical(btype) :: no_limits
-   
+   logical(btype) :: no_het_ice_nuc
+
    !-------------------------------------------------------------------------------
 
    ! define work variables
@@ -2827,7 +2828,8 @@ subroutine nucleati_bg(  &
    use_preexisting_ice = use_preexisting_ice_in
    do_ci_mohler_dep = DoCiMohlerDep
    do_lphom = DoLPHom   
-   
+   no_het_ice_nuc = NoHetIceNuc
+
    !---MIXED-PHASE--------------------------------------------------------------------------
 
    if ( ( (tc.lt.-35._rtype) .and. (tc.ge.-37._rtype) .and. (supersat_i.ge.0.05_rtype)  .and. (qc.gt.qsmall) ) .or. &
@@ -2835,8 +2837,10 @@ subroutine nucleati_bg(  &
         
         ! dep/cond-frzing for MIXED PHASE
         ! following Cooper 1986 or Meyers 1992
-        
-        if ( do_meyers .eq. .true. ) then
+        if ( no_het_ice_nuc .eq. .true. ) then
+           ! no heterogeneous freezing is allowed
+           nimix=0._rtype
+        else if ( do_meyers .eq. .true. ) then
            ! deposition/condensation nucleation in mixed clouds (Meyers, 1992)
            nimix = exp(-0.639_rtype+12.96_rtype*supersat_i)*1.e-3_rtype  ! cm-3
         else
@@ -2860,7 +2864,9 @@ subroutine nucleati_bg(  &
            scrit=0.2_rtype
         endif
         
-        if ( (tc.lt.-37_rtype) .and. (supersat_i.ge.scrit) ) then
+        if (no_het_ice_nuc .eq. .true.) then
+           nimoh = 0._rtype
+        else if ( (tc.lt.-37_rtype) .and. (supersat_i.ge.scrit) ) then
            nimoh = dst_num ! #/cm3
         endif 
    endif ! mohler 

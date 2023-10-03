@@ -48,6 +48,7 @@ module micro_p3_utils
     logical, public :: DoCiMohlerDep = .false.
     logical, public :: DoLPHom = .false.
     logical, public :: NoLimits = .false.
+    logical, public :: NoHetIceNuc = .false.
     logical, public :: use_preexisting_ice_in = .false.
 
     real(rtype),public :: pi_e3sm
