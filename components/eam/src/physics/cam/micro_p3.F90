@@ -56,7 +56,7 @@ module micro_p3
        lookup_table_1a_dum1_c, &
        p3_qc_autocon_expon, p3_qc_accret_expon, &
        NumCirrusSulf, NumCirrusINP, & ! added for new ice_nucleation -ST
-       DoCiMohlerDep, DoLPHom, NoLimits, NoHetIceNuc,euse_preexisting_ice_in, & ! added for new_ice_nucleation -ST
+       DoCiMohlerDep, DoLPHom, NoLimits, NoHetIceNuc, use_preexisting_ice_in, & ! added for new_ice_nucleation -ST
        mi25, mi35 ! added for vapor dep scaling -ST
    use wv_sat_scream, only:qv_sat
    use wv_saturation, only: svp_water, svp_ice
@@ -2660,9 +2660,10 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    !   3. Default/basic - meyers or cooper freezing                                                 
    !-------------------------------------------------------------------------------------
    
-   if ( do_new_bg_lp_frz .eq. .false. ) then
+   if ( do_new_bg_lp_frz .eq. .true. ) then
    
       ! use new code from Blaz
+      
       
       call nucleati_bg(w, t_atm, p_atm, qv_supersat_l+1._rtype, qv_supersat_i, &
                     qc, qi, ni, inv_rho, nsulf, ndust, do_meyers,  do_new_bg_lp_frz, &
@@ -2946,6 +2947,7 @@ subroutine nucleati_bg(  &
 
          regm = A * log(wbar1) + B ! Blaz' found that a factor of 0.8 in this regm term 
                                    !  makes LP more more realistic like Karcher 2022
+                                   !  to do: run with 0.8 * regm
 
          if ( tc .gt. regm ) then
        
@@ -3076,9 +3078,9 @@ subroutine nucleati_bg(  &
    
    nuci=ni+nimix+nimoh+nilphf
    
-   if ( (nuci.gt.9999._rtype) .or. (nuci.lt.0._rtype) ) then
+   if ( (nuci.gt.99999._rtype) .or. (nuci.lt.0._rtype) ) then
       write(iulog, *) 'Warning: incorrect ice nucleation number (nuci reset =0)'
-      write(iulog, *) ni, tair, relhum, wbar, nihf, niimm, nidep,deles,esi,dst_num,so4_num
+      write(iulog, *) nuci, ni, nihf, niimm, nidep, nimix, nimoh, nilphf, tair, relhum, wbar, deles, esi, dst_num, so4_num
       nuci=0._rtype
    endif
    

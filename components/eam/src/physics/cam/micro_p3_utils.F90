@@ -137,6 +137,10 @@ module micro_p3_utils
     T_icenuc   = tmelt-15._rtype
     T_rainfrz  = tmelt-4._rtype
 
+    ! If het freezing is allowed, cirrus mohler dep is off
+    if ( NoHetIceNuc .eq. .true. ) then
+        DoCiMohlerDep = .false.
+    endif    
     ! physical constants
     cp     = cpair ! specific heat of dry air (J/K/kg) !1005.
     inv_cp = 1._rtype/cp ! inverse of cp

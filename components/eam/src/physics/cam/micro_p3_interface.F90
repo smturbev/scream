@@ -136,6 +136,8 @@ module micro_p3_interface
    logical            :: use_preexisting_ice     = .false.   ! account for pre-existing ice or not
    logical            :: do_ci_mohler_dep        = .false.
    logical            :: do_lphom                = .false.
+   real               :: dep_scaling_small       = 1._rtype
+   real               :: sed_scaling_small       = 1._rtype
    
    contains
 !===============================================================================
@@ -184,6 +186,8 @@ subroutine micro_p3_readnl(nlfile)
      write(iulog,'(A30,1x,L)')    'do_new_bg_lp_frz: ',        do_new_bg_lp_frz
      write(iulog,'(A30,1x,L)')    'do_nucleate_ice_sc: ',      do_nucleate_ice_sc
      write(iulog,'(A30,1x,L)')    'use_preexisting_ice: ',     use_preexisting_ice
+     write(iulog,'(A30,1x,8e12.4)') 'dep_scaling_small: ',      dep_scaling_small
+     write(iulog,'(A30,1x,8e12.4)') 'sed_scaling_small: ',      sed_scaling_small
   end if
 
 #ifdef SPMD
@@ -200,6 +204,8 @@ subroutine micro_p3_readnl(nlfile)
   call mpibcast(do_new_bg_lp_frz,        1,                          mpilog,  0, mpicom)
   call mpibcast(do_nucleate_ice_sc,      1,                          mpilog,  0, mpicom)
   call mpibcast(use_preexisting_ice,     1,                          mpilog,  0, mpicom)
+  call mpibcast(dep_scaling_small,       1,                          mpir8,   0, mpicom)
+  call mpibcast(sed_scaling_small,       1,                          mpir8,   0, mpicom)
 
 #endif
 
@@ -888,8 +894,8 @@ end subroutine micro_p3_readnl
     real(rtype) :: cdnumc(pcols)
     real(rtype) :: icinc(pcols,pver)
     real(rtype) :: icwnc(pcols,pver)
-    real(rtype) :: dep_scaling_small=1._rtype
-    real(rtype) :: sed_scaling_small=1._rtype
+    real(rtype) :: dep_scaling_small
+    real(rtype) :: sed_scaling_small
     
 
 
