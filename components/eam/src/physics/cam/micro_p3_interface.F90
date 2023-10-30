@@ -156,7 +156,8 @@ subroutine micro_p3_readnl(nlfile)
   namelist /micro_nl/ &
        micro_p3_tableversion, micro_p3_lookup_dir, micro_aerosolactivation, micro_subgrid_cloud, &
        micro_tend_output, p3_qc_autocon_expon, p3_qc_accret_expon, do_prescribed_CCN, do_meyers, &
-       do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice
+       do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, do_cir_mohler_dep, do_lphom,   &
+       dep_scaling_small, sed_scaling_small 
 
   !-----------------------------------------------------------------------------
 
