@@ -134,8 +134,6 @@ module micro_p3_interface
    logical            :: do_new_bg_lp_frz        = .false.   ! uses nucleate_ice_bg.f90
    logical            :: do_nucleate_ice_sc      = .false.   ! uses nucleate_ice.f90
    logical            :: use_preexisting_ice     = .false.   ! account for pre-existing ice or not
-   logical            :: do_ci_mohler_dep        = .false.
-   logical            :: do_lphom                = .false.
    real               :: dep_scaling_small       = 1._rtype
    real               :: sed_scaling_small       = 1._rtype
    
@@ -156,8 +154,7 @@ subroutine micro_p3_readnl(nlfile)
   namelist /micro_nl/ &
        micro_p3_tableversion, micro_p3_lookup_dir, micro_aerosolactivation, micro_subgrid_cloud, &
        micro_tend_output, p3_qc_autocon_expon, p3_qc_accret_expon, do_prescribed_CCN, do_meyers, &
-       do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, do_cir_mohler_dep, do_lphom,   &
-       dep_scaling_small, sed_scaling_small 
+       do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, dep_scaling_small, sed_scaling_small 
 
   !-----------------------------------------------------------------------------
 

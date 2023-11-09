@@ -922,12 +922,14 @@
 <!-- P3 specific namelist variables -->
 <micro_p3_lookup_dir	    > atm/scream/tables </micro_p3_lookup_dir>
 <micro_p3_tableversion		      > 4.1.1  </micro_p3_tableversion>
-<micro_aerosolactivation              > .true.  </micro_aerosolactivation>
+<micro_aerosolactivation          > .true.  </micro_aerosolactivation>
 <micro_subgrid_cloud     	      > .true.  </micro_subgrid_cloud>
 <micro_tend_output       	      > .true.  </micro_tend_output>
-<p3_qc_autoCon_Expon    		      >  2.47   </p3_qc_autoCon_Expon>
+<p3_qc_autoCon_Expon    		  >  2.47   </p3_qc_autoCon_Expon>
 <p3_qc_accret_Expon    		      >  1.15   </p3_qc_accret_Expon>
-<do_prescribed_CCN                    > .false. </do_prescribed_CCN>
+<do_prescribed_CCN                > .false. </do_prescribed_CCN>
+<dep_scaling_small                > 1.0     </dep_scaling_small>
+<sed_scaling_small                > 1.0     </sed_scaling_small>
 
 <!-- special defaults for MMF, which now sets all other physics scheme options to "off" -->
 <micro_mincdnc        use_MMF="1">  -999.       </micro_mincdnc>
