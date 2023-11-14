@@ -184,8 +184,8 @@ subroutine micro_p3_readnl(nlfile)
      write(iulog,'(A30,1x,L)')    'do_new_bg_lp_frz: ',        do_new_bg_lp_frz
      write(iulog,'(A30,1x,L)')    'do_nucleate_ice_sc: ',      do_nucleate_ice_sc
      write(iulog,'(A30,1x,L)')    'use_preexisting_ice: ',     use_preexisting_ice
-     write(iulog,'(A30,1x,8e12.4)') 'dep_scaling_small: ',      dep_scaling_small
-     write(iulog,'(A30,1x,8e12.4)') 'sed_scaling_small: ',      sed_scaling_small
+     write(iulog,'(A30,1x,8e12.4)') 'dep_scaling_small: ',     dep_scaling_small
+     write(iulog,'(A30,1x,8e12.4)') 'sed_scaling_small: ',     sed_scaling_small
   end if
 
 #ifdef SPMD
@@ -321,6 +321,7 @@ end subroutine micro_p3_readnl
    call pbuf_add_field('T_PREV',      'global',dtype_r8,(/pcols,pver/), t_prev_idx)
 
    if (masterproc) write(iulog,'(A20)') '    P3 register finished'
+
   end subroutine micro_p3_register
 
   !================================================================================================

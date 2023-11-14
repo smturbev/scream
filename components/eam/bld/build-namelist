@@ -3663,6 +3663,8 @@ add_default($nl, 'micro_tend_output');
 add_default($nl, 'p3_qc_autoCon_Expon');
 add_default($nl, 'p3_qc_accret_Expon');
 add_default($nl, 'do_prescribed_CCN');
+add_default($nl, 'sed_scaling_small');
+add_default($nl, 'dep_scaling_small');
 
 # CLUBB_SGS
 add_default($nl, 'do_clubb_sgs');
