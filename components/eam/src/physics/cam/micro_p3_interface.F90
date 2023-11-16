@@ -134,8 +134,8 @@ module micro_p3_interface
    logical            :: do_new_bg_lp_frz        = .false.   ! uses nucleate_ice_bg.f90
    logical            :: do_nucleate_ice_sc      = .false.   ! uses nucleate_ice.f90
    logical            :: use_preexisting_ice     = .false.   ! account for pre-existing ice or not
-   real               :: dep_scaling_small       = 1._rtype
-   real               :: sed_scaling_small       = 1._rtype
+   real(rtype)        :: dep_scaling_small       = huge(1.0_rtype)
+   real(rtype)        :: sed_scaling_small       = huge(1.0_rtype)
    
    contains
 !===============================================================================
@@ -893,8 +893,8 @@ end subroutine micro_p3_readnl
     real(rtype) :: cdnumc(pcols)
     real(rtype) :: icinc(pcols,pver)
     real(rtype) :: icwnc(pcols,pver)
-    real(rtype) :: dep_scaling_small
-    real(rtype) :: sed_scaling_small
+    ! real(rtype) :: dep_scaling_small
+    ! real(rtype) :: sed_scaling_small
     
 
 
