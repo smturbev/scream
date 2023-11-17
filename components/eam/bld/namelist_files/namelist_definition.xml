@@ -2289,6 +2289,12 @@ Default: 1.0
 Scaling factor for small ice in deposition rate.
 Default: 1.0
 </entry>
+    
+<entry id="scale_all_ice" type="logical" category="microphys"
+       group="micro_nl" valid_values="" >
+Scaling factor for large ice = small ice for sedimentation/deposition scaling if true.
+Default: FALSE
+</entry>
 
 <!-- micro_p3 -->
 <entry id="p3_qc_autoCon_Expon" type="real" category="microphysics"

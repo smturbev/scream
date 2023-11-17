@@ -467,7 +467,7 @@ contains
   END SUBROUTINE p3_main_part1
 
   SUBROUTINE p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
-       do_meyers, do_new_bg_lp_frz, dep_scaling_small, & ! added for ice_deposition_sublimation -ST 
+       do_meyers, do_new_bg_lp_frz, dep_scaling_small, scale_all_ice, & ! added for ice_deposition_sublimation -ST 
        dt, inv_dt, pres, inv_exner, inv_cld_frac_l, inv_cld_frac_i, inv_cld_frac_r, ni_activated, &
        inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl, & 
        t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_l, qv_supersat_i, rhofaci, acn, qv, th_atm, qc, nc, qr, nr, qi, ni, &
@@ -484,6 +484,7 @@ contains
     integer, intent(in) :: kts, kte, kbot, ktop, kdir
     logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz
     real(rtype), intent(in) :: dt, inv_dt, dep_scaling_small
+    logical(btype), intent(in) :: scale_all_ice
 
     real(rtype), intent(in), dimension(kts:kte) :: pres, inv_exner, inv_cld_frac_l,  &
          inv_cld_frac_i, inv_cld_frac_r, ni_activated, inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl
@@ -762,7 +763,7 @@ contains
 
       call ice_deposition_sublimation(qi_incld(k), ni_incld(k), t_atm(k), &
            qv_sat_l(k),qv_sat_i(k),epsi,abi,qv(k), inv_dt, dep_scaling_small, &
-           qidep,qi2qv_sublim_tend,ni_sublim_tend,qiberg)
+           scale_all_ice, qidep,qi2qv_sublim_tend,ni_sublim_tend,qiberg)
 
 444   continue
 
@@ -1148,8 +1149,8 @@ contains
 
   SUBROUTINE p3_main(qc,nc,qr,nr,th_atm,qv,dt,qi,qm,ni,bm,   &
        pres,dz,nc_nuceat_tend,nccn_prescribed,ni_activated,inv_qc_relvar,it,precip_liq_surf,precip_ice_surf,its,ite,kts,kte,diag_eff_radius_qc,     &
-       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, dep_scaling_small, sed_scaling_small, uzpl, &
-       dpres,inv_exner,qv2qi_depos_tend,precip_total_tend,nevapr,qr_evap_tend,precip_liq_flux,precip_ice_flux,cld_frac_r,cld_frac_l,cld_frac_i,  &
+       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, dep_scaling_small, sed_scaling_small, scale_all_ice, &
+       uzpl, dpres,inv_exner,qv2qi_depos_tend,precip_total_tend,nevapr,qr_evap_tend,precip_liq_flux,precip_ice_flux,cld_frac_r,cld_frac_l,cld_frac_i,  &
        p3_tend_out,mu_c,lamc,liq_ice_exchange,vap_liq_exchange, &
        vap_ice_exchange,qv_prev,t_prev,col_location &
 #ifdef SCREAM_CONFIG_IS_CMAKE
@@ -1230,6 +1231,7 @@ contains
     ! set in micro_p3_interface.F90
     real(rtype), intent(in)            :: dep_scaling_small ! scaling factor for small ice mass, typically 0.5, 1 (no scaling), or 2
     real(rtype), intent(in)            :: sed_scaling_small ! scaling factor for small ice mass, typically 0.5, 1 (no scaling), or 2 
+    logical(btype), intent(in)         :: scale_all_ice     ! scaling factor for small ice mass = scaling factor for all (incl. large) ice
 
     ! INPUT needed for PBUF variables used by other parameterizations
 
@@ -1399,7 +1401,7 @@ contains
        if (.not. (is_nucleat_possible .or. is_hydromet_present)) goto 333
 
        call p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
-            do_meyers, do_new_bg_lp_frz, dep_scaling_small, &
+            do_meyers, do_new_bg_lp_frz, dep_scaling_small, scale_all_ice, &
             dt, inv_dt, &
             pres(i,:), inv_exner(i,:), &
             inv_cld_frac_l(i,:), inv_cld_frac_i(i,:), inv_cld_frac_r(i,:), ni_activated(i,:), inv_qc_relvar(i,:), &
@@ -1469,7 +1471,7 @@ contains
 
        call ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
          rho(i,:),inv_rho(i,:),rhofaci(i,:),cld_frac_i(i,:),inv_dz(i,:),dt,inv_dt, &
-         sed_scaling_small, &
+         sed_scaling_small, scale_all_ice, &
          qi(i,:),qi_incld(i,:),ni(i,:),qm(i,:),qm_incld(i,:),bm(i,:),bm_incld(i,:),ni_incld(i,:), &
          precip_ice_surf(i),p3_tend_out(i,:,40),p3_tend_out(i,:,41))
 
@@ -4244,7 +4246,7 @@ subroutine update_prognostic_liquid(qc2qr_accret_tend,nc_accret_tend,qc2qr_autoc
 end subroutine update_prognostic_liquid
 
  subroutine ice_deposition_sublimation(qi_incld,ni_incld,t_atm,    &
-qv_sat_l,qv_sat_i,epsi,abi,qv, inv_dt, dep_scaling_small, &
+qv_sat_l,qv_sat_i,epsi,abi,qv, inv_dt, dep_scaling_small, scale_all_ice, &
 qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
 
    implicit none
@@ -4259,6 +4261,7 @@ qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
    real(rtype), intent(in)  :: qv
    real(rtype), intent(in)  :: inv_dt
    real(rtype), intent(in)  :: dep_scaling_small
+   logical(btype), intent(in) :: scale_all_ice
    real(rtype), intent(out) :: qv2qi_depos_tend
    real(rtype), intent(out) :: qi2qv_sublim_tend
    real(rtype), intent(out) :: ni_sublim_tend
@@ -4273,6 +4276,12 @@ qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
    qv2qi_depos_tend  = 0._rtype
    qi2qv_sublim_tend  = 0._rtype
    ni_sublim_tend  = 0._rtype
+   
+   ! if scale_all_ice is true, dep_scaling_large=dep_scaling_small
+   if ( scale_all_ice ) then
+      dep_scaling_large=dep_scaling_small
+      if (masterproc) write(iulog,*) '   dep_scaling for all ice is ON'
+      
 
    !NO ICE => NO DEPOS/SUBLIM SO SKIP ALL CALCULATIONS
    if (qi_incld>qsmall) then
@@ -4901,7 +4910,7 @@ end subroutine compute_rain_fall_velocity
 
 subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
    rho,inv_rho,rhofaci,cld_frac_i,inv_dz,dt,inv_dt,  &
-   sed_scaling_small, &
+   sed_scaling_small, scale_all_ice, &
    qi,qi_incld,ni,qm,qm_incld,bm,bm_incld,ni_incld,precip_ice_surf,qi_tend,ni_tend)
 
    implicit none
@@ -4916,6 +4925,7 @@ subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
    real(rtype), intent(in) :: dt
    real(rtype), intent(in) :: inv_dt
    real(rtype), intent(in) :: sed_scaling_small
+   logical(btype), intent(in) :: scale_all_ice
 
    real(rtype), intent(inout), dimension(kts:kte), target :: qi
    real(rtype), intent(inout), dimension(kts:kte) :: qi_incld
@@ -4958,6 +4968,11 @@ subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
 
    log_qxpresent = .false.  !note: this applies to ice category 'iice' only
    k_qxtop       = kbot
+   
+   ! do scaling for all ice (i.e., sed_scaling_large=sed_scaling_small
+   if (scale_all_ice) then
+     sed_scaling_large = sed_scaling_small
+     if (masterproc) write(iulog,*) '   sed_scaling for all ice is ON'
 
    vs(1)%p => V_qit
    vs(2)%p => V_nit

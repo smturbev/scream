@@ -136,6 +136,7 @@ module micro_p3_interface
    logical            :: use_preexisting_ice     = .false.   ! account for pre-existing ice or not
    real(rtype)        :: dep_scaling_small       = huge(1.0_rtype)
    real(rtype)        :: sed_scaling_small       = huge(1.0_rtype)
+   logical            :: scale_all_ice           = .false.   ! default to only scaling small ice
    
    contains
 !===============================================================================
@@ -154,7 +155,8 @@ subroutine micro_p3_readnl(nlfile)
   namelist /micro_nl/ &
        micro_p3_tableversion, micro_p3_lookup_dir, micro_aerosolactivation, micro_subgrid_cloud, &
        micro_tend_output, p3_qc_autocon_expon, p3_qc_accret_expon, do_prescribed_CCN, do_meyers, &
-       do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, dep_scaling_small, sed_scaling_small 
+       do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, dep_scaling_small, sed_scaling_small, &
+       scale_all_ice
 
   !-----------------------------------------------------------------------------
 
@@ -186,6 +188,8 @@ subroutine micro_p3_readnl(nlfile)
      write(iulog,'(A30,1x,L)')    'use_preexisting_ice: ',     use_preexisting_ice
      write(iulog,'(A30,1x,8e12.4)') 'dep_scaling_small: ',     dep_scaling_small
      write(iulog,'(A30,1x,8e12.4)') 'sed_scaling_small: ',     sed_scaling_small
+     write(iulog,'(A30,1x,8e12.4)') 'scale_all_ice: ',         scale_all_ice
+
   end if
 
 #ifdef SPMD
@@ -204,6 +208,7 @@ subroutine micro_p3_readnl(nlfile)
   call mpibcast(use_preexisting_ice,     1,                          mpilog,  0, mpicom)
   call mpibcast(dep_scaling_small,       1,                          mpir8,   0, mpicom)
   call mpibcast(sed_scaling_small,       1,                          mpir8,   0, mpicom)
+  call mpibcast(scale_all_ice,           1,                          mpilog,  0, mpicom)
 
 #endif
 
@@ -1157,6 +1162,7 @@ end subroutine micro_p3_readnl
          do_new_bg_lp_frz,            & ! IN - use nucleate_ice_bg.f90
          dep_scaling_small,           & ! IN     scaling factor for vapor deposition on small ice particles
          sed_scaling_small,           & ! IN     scaling factor for ice sedimentation on small ice particles
+         scale_all_ice,               & ! IN     determines if we scale all ice or small ice only for dep/sed scaling rates
          state%omega(its:ite,kts:kte),& ! IN  vertical veloctiy, omega            Pa/s
          ! AaronDonahue new stuff
          state%pdeldry(its:ite,kts:kte),  & ! IN pressure level thickness for computing total mass
