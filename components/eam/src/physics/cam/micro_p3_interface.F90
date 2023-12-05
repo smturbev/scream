@@ -898,8 +898,6 @@ end subroutine micro_p3_readnl
     real(rtype) :: cdnumc(pcols)
     real(rtype) :: icinc(pcols,pver)
     real(rtype) :: icwnc(pcols,pver)
-    ! real(rtype) :: dep_scaling_small
-    ! real(rtype) :: sed_scaling_small
     
 
 

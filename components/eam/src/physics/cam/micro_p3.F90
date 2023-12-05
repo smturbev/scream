@@ -56,7 +56,7 @@ module micro_p3
        lookup_table_1a_dum1_c, &
        p3_qc_autocon_expon, p3_qc_accret_expon, &
        NumCirrusSulf, NumCirrusINP, & ! added for new ice_nucleation -ST
-       DoCiMohlerDep, DoLPHom, NoLimits, NoHetIceNuc, use_preexisting_ice_in, & ! added for new_ice_nucleation -ST
+       DoCiMohlerDep, DoLPHom, DoLP2005, NoLimits, NoHetIceNuc, use_preexisting_ice_in, & ! added for new_ice_nucleation -ST
        mi25, mi35 ! added for vapor dep scaling -ST
    use wv_sat_scream, only:qv_sat
    use wv_saturation, only: svp_water, svp_ice
@@ -2662,13 +2662,13 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    !   3. Default/basic - meyers or cooper freezing                                                 
    !-------------------------------------------------------------------------------------
    
-   if ( do_new_bg_lp_frz .eq. .true. ) then
+   if ( do_new_bg_lp_frz ) then
    
       ! use new code from Blaz
       
       
       call nucleati_bg(w, t_atm, p_atm, qv_supersat_l+1._rtype, qv_supersat_i, &
-                    qc, qi, ni, inv_rho, nsulf, ndust, do_meyers,  do_new_bg_lp_frz, &
+                    qc, qi, ni, inv_rho, nsulf, ndust, do_meyers,  &
                     nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix,  & ! outputs bg
                     wpice, weff, fhom) ! outputs bg
       
@@ -2737,7 +2737,7 @@ end subroutine
 subroutine nucleati_bg(  &
    wbar, tair, pmid, relhum, supersat_i,&
    qc, qi, ni_pre, inv_rho,             &
-   so4_num, dst_num, do_meyers, do_new_bg_lp_frz,  &
+   so4_num, dst_num, do_meyers,         &
    nuci, onihf, oniimm, onidep, onimix, &
    wpice, weff, fhom )
 
@@ -2768,7 +2768,6 @@ subroutine nucleati_bg(  &
    real(rtype), intent(in) :: so4_num     ! so4 aerosol number (#/cm^3)
    real(rtype), intent(in) :: dst_num     ! total dust aerosol number (#/cm^3)
    logical,  intent(in)    :: do_meyers   ! meyers or cooper
-   logical,  intent(in)    :: do_new_bg_lp_frz ! do the new scheme from blaz using LP2005
    
    ! Output Arguments
    real(rtype), intent(out) :: nuci       ! ice number nucleated (#/kg)
@@ -2832,6 +2831,7 @@ subroutine nucleati_bg(  &
    do_ci_mohler_dep = DoCiMohlerDep
    do_lphom = DoLPHom   
    no_het_ice_nuc = NoHetIceNuc
+   do_lp2005 = DoLP2005
 
    !---MIXED-PHASE--------------------------------------------------------------------------
 
@@ -2890,7 +2890,7 @@ subroutine nucleati_bg(  &
    
    !---LP2005-HOM-HET-----------------------------------------------------------------------
       
-   if ( do_new_bg_lp_frz .eq. .true. ) then
+   if ( do_lp2005 .eq. .true. ) then
       ! temp variables that depend on use_preexisting_ice
       wbar1 = wbar
       wbar2 = wbar
@@ -4281,6 +4281,7 @@ qv2qi_depos_tend,qi2qv_sublim_tend,ni_sublim_tend,qc2qi_berg_tend)
    if ( scale_all_ice ) then
       dep_scaling_large=dep_scaling_small
       if (masterproc) write(iulog,*) '   dep_scaling for all ice is ON'
+   endif
       
 
    !NO ICE => NO DEPOS/SUBLIM SO SKIP ALL CALCULATIONS
@@ -4973,7 +4974,7 @@ subroutine ice_sedimentation(kts,kte,ktop,kbot,kdir,    &
    if (scale_all_ice) then
      sed_scaling_large = sed_scaling_small
      if (masterproc) write(iulog,*) '   sed_scaling for all ice is ON'
-
+   endif
    vs(1)%p => V_qit
    vs(2)%p => V_nit
    vs(3)%p => V_qit

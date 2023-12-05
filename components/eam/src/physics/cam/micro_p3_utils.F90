@@ -47,6 +47,7 @@ module micro_p3_utils
                               !BG: based on simulated upper tropospheric (200 hPa) values of dust in Tropical Western Pacific for ECHAM-HAM GCM simulations
     logical, public :: DoCiMohlerDep = .false.
     logical, public :: DoLPHom = .false.
+    logical, public :: DoLP2005 = .true.
     logical, public :: NoLimits = .false.
     logical, public :: NoHetIceNuc = .false.
     logical, public :: use_preexisting_ice_in = .false.

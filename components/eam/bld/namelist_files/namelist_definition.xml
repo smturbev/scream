@@ -2278,6 +2278,13 @@ Output microphysics tendencies in standard atm output file.
 Default: TRUE
 </entry>
     
+<entry id="do_new_bg_lp_frz" type="logical" category="microphy"
+       group="micro_nl" valid_values="" >
+Specify if the new ice nucleation developed by Blaz Gasparini 
+using LP2005is used in P3 microphysics scheme.
+Default: FALSE
+</entry>
+    
 <entry id="sed_scaling_small" type="real" category="microphys"
        group="micro_nl" valid_values="" >
 Scaling factor for small ice in sedimentation rate.
