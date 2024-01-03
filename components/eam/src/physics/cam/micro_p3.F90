@@ -2807,6 +2807,7 @@ subroutine nucleati_bg(  &
    logical(btype) :: use_preexisting_ice
    logical(btype) :: do_ci_mohler_dep
    logical(btype) :: do_lphom
+   logical(btype) :: do_lp2005
    logical(btype) :: no_limits
    logical(btype) :: no_het_ice_nuc
 
