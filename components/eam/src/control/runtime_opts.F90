@@ -261,6 +261,7 @@ contains
    use solar_data,          only: solar_data_readnl
    use tropopause,          only: tropopause_readnl
    use aoa_tracers,         only: aoa_tracers_readnl
+   use cldera_passive_tracers,only: cldera_passive_tracers_readnl
    use prescribed_ozone,    only: prescribed_ozone_readnl
    use prescribed_aero,     only: prescribed_aero_readnl
    use prescribed_ghg,      only: prescribed_ghg_readnl
@@ -525,6 +526,7 @@ contains
    call solar_data_readnl(nlfilename)
    call tropopause_readnl(nlfilename)
    call aoa_tracers_readnl(nlfilename)
+   call cldera_passive_tracers_readnl(nlfilename)
    call aerodep_flx_readnl(nlfilename)
    call prescribed_ozone_readnl(nlfilename)
    call prescribed_aero_readnl(nlfilename)

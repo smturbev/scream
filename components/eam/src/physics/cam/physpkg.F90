@@ -151,6 +151,7 @@ subroutine phys_register
     use prescribed_ghg,     only: prescribed_ghg_register
     use sslt_rebin,         only: sslt_rebin_register
     use aoa_tracers,        only: aoa_tracers_register
+    use cldera_passive_tracers, only: cldera_passive_tracers_register
     use aircraft_emit,      only: aircraft_emit_register
     use cam_diagnostics,    only: diag_register
     use cloud_diagnostics,  only: cloud_diagnostics_register
@@ -326,6 +327,9 @@ subroutine phys_register
 
     ! Register age of air tracers
     call aoa_tracers_register()
+
+    ! Register CLDERA passive tracers
+    call cldera_passive_tracers_register()
 
     ! Register test tracers
     ! ***** N.B. ***** This is the last call to register constituents because
@@ -717,6 +721,7 @@ subroutine phys_init( phys_state, phys_tend, pbuf2d, cam_out )
     use conv_water,         only: conv_water_init
     use tracers,            only: tracers_init
     use aoa_tracers,        only: aoa_tracers_init
+    use cldera_passive_tracers, only: cldera_passive_tracers_init
     use rayleigh_friction,  only: rayleigh_friction_init
     use pbl_utils,          only: pbl_utils_init
     use vertical_diffusion, only: vertical_diffusion_init
@@ -789,6 +794,9 @@ subroutine phys_init( phys_state, phys_tend, pbuf2d, cam_out )
 
     ! age of air tracers
     call aoa_tracers_init()
+    
+    ! CLDERA passive tracers
+    call cldera_passive_tracers_init()
 
     teout_idx = pbuf_get_index( 'TEOUT')
 
@@ -1482,6 +1490,7 @@ subroutine tphysac (ztodt,   cam_in,  &
     use ionosphere,         only: ionos_intr ! WACCM-X ionosphere
     use tracers,            only: tracers_timestep_tend
     use aoa_tracers,        only: aoa_tracers_timestep_tend
+    use cldera_passive_tracers, only: cldera_passive_tracers_timestep_tend
     use physconst,          only: rhoh2o, latvap,latice, rga
     use aero_model,         only: aero_model_drydep
     use check_energy,       only: check_energy_chng, check_water, & 
@@ -1681,6 +1690,7 @@ if (l_tracer_aero) then
          cam_in%cflx)
 
     call aoa_tracers_timestep_tend(state, ptend, cam_in%cflx, cam_in%landfrac, ztodt)      
+    call cldera_passive_tracers_timestep_tend(state, ptend, ztodt, cam_in%cflx)
     call physics_update(state, ptend, ztodt, tend)
     call check_tracers_chng(state, tracerint, "aoa_tracers_timestep_tend", nstep, ztodt,   &
          cam_in%cflx)
