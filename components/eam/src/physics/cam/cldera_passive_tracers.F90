@@ -51,6 +51,8 @@ module cldera_passive_tracers
 
   integer :: ifirst ! global index of first constituent
   integer :: ixaoa  ! global index for AOA tracer
+  integer :: ixaoa  ! global index for AOA tracer
+  integer :: ixaoa  ! global index for AOA tracer
   integer :: ixe90  ! global index for E90 tracer
   integer :: ixst80 ! global index for ST80_25 tracer
 
@@ -115,6 +117,12 @@ contains
     use physconst,  only: cpair, mwdry
     !-----------------------------------------------------------------------
 
+    !  initialize ix to be -1
+    ixnuc = -1
+    ixbcu = -1
+    ixaoa = -1
+    ixe90 = -1
+    
     if (.not. cldera_passive_tracers_flag) return
 
     call cnst_add(c_names(1), mwdry, cpair, 0._r8, ixaoa,  readiv=cldera_passive_read_from_ic_file, &
@@ -268,6 +276,10 @@ contains
     lchnk = state%lchnk
     ncol  = state%ncol
 
+    ! ---- compute nuc and bcu time scaling (1 s in hours)
+    nuc_scaling = 1._r8/3600._r8
+    bcu_scaling = 1._r8/3600._r8
+    
     ! ---- compute AOA time scaling (1 s in days)
     aoa_scaling = 1._r8/86400._r8
 
@@ -309,6 +321,20 @@ contains
               state%q(i,k,ixaoa) = 0.0_r8
           end if
 
+          ! ============ BCU ============
+          ! clock tracer with a source of 1 hour everywhere in 
+          ! a cloudy, rising parcel; set ptend
+          ! else decay with timescale ~ 1 hour (3600 s)
+          if ( (state%omega <= -0.5) and (state%q(i,k,ixbcu) > 1e-5 ) then 
+              ptend%q(i,k,ixbcu) = (1.0_r8 - state%q(i,k,ixbcu))/ dt
+          else 
+              ptend%q(i,k,ixbcu) = -state%q(i,k,ixbcu) * bcu_scaling
+
+          ! ============ NUC ============
+          ! Decay everywhere here but reset tend in mphys (P3 interface)
+          ! use this module and indices ixnuc then reset anytime we have fresh nucleation in P3
+          ptend%q(i,k,ixnuc) = -state%q(i,k,ixnuc) * nuc_scaling
+
           ! ============ E90 ============
           ! dissipates with e-folding time of 90 days
           ptend%q(i,k,ixe90) =  -(1/efold_e90) * state%q(i, k, ixe90)
@@ -337,6 +363,13 @@ contains
 
     ! -------------------- TRACER FLUXES --------------------
     do i = 1, ncol
+       ! ====== BCU ======
+       ! no surface flux
+       cflx(i,ixbcu) = 0._r8
+       ! ====== AOA ======
+       ! no surface flux
+       cflx(i,ixnuc) = 0._r8
+       
        ! ====== AOA ======
        ! no surface flux
        cflx(i,ixaoa) = 0._r8
@@ -374,6 +407,14 @@ contains
 
     if (masterproc) write(iulog,*) 'CLDERA PASSIVE CONSTITUENTS: INITIALIZING ',cnst_name(m),m
 
+    ! ====== AOA ======
+    if (m == ixnuc) then
+       q(:,:) = 0.0_r8
+
+    ! ====== AOA ======
+    if (m == ixbcu) then
+       q(:,:) = 0.0_r8
+    
     ! ====== AOA ======
     if (m == ixaoa) then
        q(:,:) = 0.0_r8

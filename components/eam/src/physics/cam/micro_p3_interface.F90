@@ -43,6 +43,7 @@ module micro_p3_interface
   use cam_grid_support, only: cam_grid_check, cam_grid_id, cam_grid_get_dim_names
   use ncdio_atm,       only: infld
   use ppgrid,         only: begchunk, endchunk, pcols, pver, pverp,psubcols
+  use cldera_passive_tracers, only: ixnuc
 
   implicit none
   save
@@ -1185,6 +1186,22 @@ end subroutine micro_p3_readnl
          col_location(its:ite,:3)          & ! IN column locations
          )
 
+    ! age of nucleation tracer is set to decay over time if tracer is on 
+    ! (i.e., ixnuc >0; off if ixnuc=-1). Then set the ixnuc constituent
+    ! to be updated lq(ixnuc)=.true. Then set the tendency of ixnuc to decay
+    ! over each timestep that fresh nucleation has not occurred. Fresh nuc set
+    ! in ice nucleation. 
+    if ( ixnuc > 0 ) then
+        lq(ixnuc) = .true. ! set ixnuc to be updated if tracer is on
+        do k=1,pver
+            do i=1,ncol
+                if tend_out(i,k,50)>0 then
+                    ptend%q(i,k,ixnuc) = (1.0_rtype - state%q(i,k,ixnuc)) / dtime
+                end if
+            end do
+        end do
+    end if
+    
     p3_main_outputs(:,:,:) = -999._rtype
     do k = 1,pver
       p3_main_outputs(1,k, 1) = cldliq(1,k)
