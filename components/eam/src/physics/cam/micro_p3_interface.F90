@@ -63,14 +63,15 @@ module micro_p3_interface
 
   integer, public ::    &
        ixcldliq = -1,   & ! cloud liquid amount index
-       ixcldice = -1,      & ! ice index
+       ixcldice = -1,   & ! ice index
        ixnumliq = -1,   & ! cloud liquid number index
        ixnumice = -1,   & ! cloud ice number index
        ixrain   = -1,   & ! rain index
        ixnumrain= -1,   & ! rain number index
-       ixcldrim = -1,      & ! rime index ??
-       ixrimvol  = -1,  & ! rime volume index ??
-       ixqm  = -1      ! ?? index ??
+       ixcldrim = -1,   & ! rime index ??
+       ixrimvol = -1,   & ! rime volume index ??
+       ixqm  = -1       ! ?? index ??
+       ! ixnuc = -1         ! ice nuc tracer index
 
 !! pbuf
    integer :: &
@@ -96,7 +97,8 @@ module micro_p3_interface
       qv_prev_idx,        &
       t_prev_idx,         &
       accre_enhan_idx,    &
-      ccn3_idx
+      ccn3_idx,           &
+      ixnuc
 
 
 ! Physics buffer indices for fields registered by other modules
@@ -286,9 +288,12 @@ end subroutine micro_p3_readnl
          longname='Grid box averaged riming volume', &
          is_convtran1=.true.)
    ncnst = ncnst + 1
-
-    ! Add Variables to Pbuf
-    !================
+   ! call cnst_add(cnst_names(9), mwh2o, cpair, 0._rtype, ixnux, &
+   !      longname='Time since nucleation passive tracer', &
+   !      is_convtran1=.true.)
+   !ncnst = ncnst + 1
+   ! Add Variables to Pbuf
+   !================
    !! module microp_aero
    call pbuf_add_field('CLDO','global', dtype_r8,(/pcols,pver,dyn_time_lvls/),cldo_idx)
 
@@ -898,8 +903,7 @@ end subroutine micro_p3_readnl
     real(rtype) :: freqi(pcols,pver)
     real(rtype) :: cdnumc(pcols)
     real(rtype) :: icinc(pcols,pver)
-    real(rtype) :: icwnc(pcols,pver)
-    
+    real(rtype) :: icwnc(pcols,pver) 
 
 
     integer :: it                      !timestep counter                       -
@@ -1193,10 +1197,10 @@ end subroutine micro_p3_readnl
     ! in ice nucleation. 
     if ( ixnuc > 0 ) then
         lq(ixnuc) = .true. ! set ixnuc to be updated if tracer is on
-        do k=1,pver
-            do i=1,ncol
-                if tend_out(i,k,50)>0 then
-                    ptend%q(i,k,ixnuc) = (1.0_rtype - state%q(i,k,ixnuc)) / dtime
+        do k = 1,pver
+            do icol = 1,ncol
+                if ( tend_out(icol,k,50)>0 ) then
+                    ptend%q(icol,k,ixnuc) = (1.0_rtype - state%q(icol,k,ixnuc)) / dtime
                 end if
             end do
         end do

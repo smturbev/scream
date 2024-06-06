@@ -44,21 +44,21 @@ module cldera_passive_tracers
   public :: cldera_passive_tracers_readnl           ! read namelist options
 
   ! ----- Private module data
-  integer, parameter :: ncnst=3  ! number of constituents implemented by this module
+  integer, parameter :: ncnst=5  ! number of constituents implemented by this module
 
   ! constituent names
-  character(len=8), parameter :: c_names(ncnst) = (/'AOA     ', 'E90j    ', 'ST80_25j'/)
+  character(len=8), parameter :: c_names(ncnst) = (/'AOA     ', 'NUC     ','BCU     ','E90j    ', 'ST80_25j'/)
 
   integer :: ifirst ! global index of first constituent
   integer :: ixaoa  ! global index for AOA tracer
-  integer :: ixaoa  ! global index for AOA tracer
-  integer :: ixaoa  ! global index for AOA tracer
+  integer,public :: ixnuc  ! global index for NUC tracer
+  integer :: ixbcu  ! global index for BCU tracer
   integer :: ixe90  ! global index for E90 tracer
   integer :: ixst80 ! global index for ST80_25 tracer
 
   ! Data from namelist variables
-  logical :: cldera_passive_tracers_flag  = .false.    ! true => turn on test tracer code, namelist variable
-  logical :: cldera_passive_read_from_ic_file = .true. ! true => tracers initialized from IC file
+  logical :: cldera_passive_tracers_flag  = .true.    ! true => turn on test tracer code, namelist variable
+  logical :: cldera_passive_read_from_ic_file = .false. ! true => tracers initialized from IC file
 
 !===============================================================================
 contains
@@ -128,11 +128,15 @@ contains
     call cnst_add(c_names(1), mwdry, cpair, 0._r8, ixaoa,  readiv=cldera_passive_read_from_ic_file, &
                   longname='Age-of-air tracer')
     ifirst = ixaoa
-    call cnst_add(c_names(2), 28._r8/1000._r8, cpair, 0._r8, ixe90,  &
+    call cnst_add(c_names(2), 28._r8/1000._r8, cpair, 0._r8, ixbcu,  &
+                  readiv=cldera_passive_read_from_ic_file, longname='Buoyant convective updraft tracer', mixtype='dry')
+    call cnst_add(c_names(3), 28._r8/1000._r8, cpair, 0._r8, ixnuc, &
+                  readiv=cldera_passive_read_from_ic_file, longname='Nucleation tracer', mixtype='dry')
+    call cnst_add(c_names(4), 28._r8/1000._r8, cpair, 0._r8, ixe90,  &
                   readiv=cldera_passive_read_from_ic_file, longname='E90 tracer', mixtype='dry')
-    call cnst_add(c_names(3), 28._r8/1000._r8, cpair, 0._r8, ixst80, &
+    call cnst_add(c_names(5), 28._r8/1000._r8, cpair, 0._r8, ixst80, &
                   readiv=cldera_passive_read_from_ic_file, longname='ST80_25 tracer', mixtype='dry')
-
+    
   end subroutine cldera_passive_tracers_register
 
 !===============================================================================
@@ -252,6 +256,8 @@ contains
     integer  :: day,sec          ! date variables
     real(r8) :: t                ! tracer boundary condition
     real(r8) :: aoa_scaling      ! scale AOA1 from nstep to time
+    real(r8) :: bcu_scaling      ! scale AOA1 from nstep to time
+    real(r8) :: nuc_scaling      ! scale AOA1 from nstep to time
 
     real(r8) :: efold_st80       ! e-folding timescale for e90 in s
     real(r8) :: efold_e90        ! e-folding timescale for e90 in s
@@ -268,6 +274,8 @@ contains
 
     lq(:)      = .FALSE.
     lq(ixaoa)  = .TRUE.
+    lq(ixnuc)  = .TRUE.
+    lq(ixbcu)  = .TRUE.
     lq(ixe90)  = .TRUE.
     lq(ixst80) = .TRUE.
     call physics_ptend_init(ptend,state%psetcols, 'cldera_passive_tracers', lq=lq)
@@ -314,7 +322,7 @@ contains
 
           ! ============ AOA ============
           ! clock tracer with a source of 1 day/day everywhere above ~700hPa
-          if (pref_mid_norm(k) <= 0.7) then
+          if (pref_mid_norm(k) <= 0.7_r8) then
               ptend%q(i,k,ixaoa) = 1.0_r8 * aoa_scaling
           else
               ptend%q(i,k,ixaoa) = 0.0_r8
@@ -325,10 +333,11 @@ contains
           ! clock tracer with a source of 1 hour everywhere in 
           ! a cloudy, rising parcel; set ptend
           ! else decay with timescale ~ 1 hour (3600 s)
-          if ( (state%omega <= -0.5) and (state%q(i,k,ixbcu) > 1e-5 ) then 
+          if ( (state%omega(i,k) <= -0.5_r8) .and. (state%q(i,k,ixbcu) > 1.e-5_r8 ) ) then 
               ptend%q(i,k,ixbcu) = (1.0_r8 - state%q(i,k,ixbcu))/ dt
           else 
               ptend%q(i,k,ixbcu) = -state%q(i,k,ixbcu) * bcu_scaling
+          end if
 
           ! ============ NUC ============
           ! Decay everywhere here but reset tend in mphys (P3 interface)
@@ -407,13 +416,15 @@ contains
 
     if (masterproc) write(iulog,*) 'CLDERA PASSIVE CONSTITUENTS: INITIALIZING ',cnst_name(m),m
 
-    ! ====== AOA ======
+    ! ====== NUC ======
     if (m == ixnuc) then
        q(:,:) = 0.0_r8
+    end if
 
-    ! ====== AOA ======
+    ! ====== BCU ======
     if (m == ixbcu) then
        q(:,:) = 0.0_r8
+    end if 
     
     ! ====== AOA ======
     if (m == ixaoa) then
