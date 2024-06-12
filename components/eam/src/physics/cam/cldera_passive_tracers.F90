@@ -18,7 +18,6 @@
 ! Eyring, V. et al. (2013)
 ! Overview of IGAC/SPARC Chemistry-Climate Model Initiative (CCMI) Community Simulations in 
 ! Support of Upcoming Ozone and Climate Assessments
-!
 !===============================================================================
 
 module cldera_passive_tracers
@@ -30,6 +29,7 @@ module cldera_passive_tracers
   use cam_logfile,    only: iulog
   use ref_pres,       only: pref_mid_norm
   use cam_abortutils, only: endrun
+  use micro_p3_interface, only: ixcldliq, ixcldice
 
   implicit none
   private
@@ -333,7 +333,7 @@ contains
           ! clock tracer with a source of 1 hour everywhere in 
           ! a cloudy, rising parcel; set ptend
           ! else decay with timescale ~ 1 hour (3600 s)
-          if ( (state%omega(i,k) <= -0.5_r8) .and. (state%q(i,k,ixbcu) > 1.e-5_r8 ) ) then 
+          if ( (state%omega(i,k) <= -1.e-5_r8) .and. ((state%q(i,k,ixcldliq)+state%q(i,k,ixcldice)) > 1.e-5_r8 ) ) then 
               ptend%q(i,k,ixbcu) = (1.0_r8 - state%q(i,k,ixbcu))/ dt
           else 
               ptend%q(i,k,ixbcu) = -state%q(i,k,ixbcu) * bcu_scaling

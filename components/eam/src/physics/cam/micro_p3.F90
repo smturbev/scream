@@ -2728,8 +2728,8 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
             qinuc = ni_nucleat_tend * mi0
             
          endif
-      endif 
-
+     endif 
+     nnuc = ni_nucleat_tend
    endif 
    
 end subroutine
