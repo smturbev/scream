@@ -29,7 +29,7 @@ module cldera_passive_tracers
   use cam_logfile,    only: iulog
   use ref_pres,       only: pref_mid_norm
   use cam_abortutils, only: endrun
-  use micro_p3_interface, only: ixcldliq, ixcldice
+  ! use micro_p3_interface, only: ixcldliq, ixcldice
 
   implicit none
   private
@@ -47,12 +47,12 @@ module cldera_passive_tracers
   integer, parameter :: ncnst=5  ! number of constituents implemented by this module
 
   ! constituent names
-  character(len=8), parameter :: c_names(ncnst) = (/'AOA     ', 'NUC     ','BCU     ','E90j    ', 'ST80_25j'/)
+  character(len=8), parameter :: c_names(ncnst) = (/'AOA     ','BCU     ', 'NUC     ','E90j    ', 'ST80_25j'/)
 
   integer :: ifirst ! global index of first constituent
   integer :: ixaoa  ! global index for AOA tracer
-  integer,public :: ixnuc  ! global index for NUC tracer
   integer :: ixbcu  ! global index for BCU tracer
+  integer,public :: ixnuc  ! global index for NUC tracer
   integer :: ixe90  ! global index for E90 tracer
   integer :: ixst80 ! global index for ST80_25 tracer
 
@@ -250,7 +250,7 @@ contains
     integer :: ncol              ! no. of column in chunk
     integer :: nstep             ! current timestep number
     integer :: trop_level(pcols) ! tropopause level for all columns 
-
+    integer :: ixcldliq, ixcldice ! from micro_p3_interface
     logical  :: lq(pcnst)
 
     integer  :: day,sec          ! date variables
@@ -274,8 +274,8 @@ contains
 
     lq(:)      = .FALSE.
     lq(ixaoa)  = .TRUE.
-    lq(ixnuc)  = .TRUE.
     lq(ixbcu)  = .TRUE.
+    lq(ixnuc)  = .TRUE.
     lq(ixe90)  = .TRUE.
     lq(ixst80) = .TRUE.
     call physics_ptend_init(ptend,state%psetcols, 'cldera_passive_tracers', lq=lq)
@@ -333,7 +333,8 @@ contains
           ! clock tracer with a source of 1 hour everywhere in 
           ! a cloudy, rising parcel; set ptend
           ! else decay with timescale ~ 1 hour (3600 s)
-          if ( (state%omega(i,k) <= -1.e-5_r8) .and. ((state%q(i,k,ixcldliq)+state%q(i,k,ixcldice)) > 1.e-5_r8 ) ) then 
+          if ( (state%omega(i,k) <= -1.e-5_r8) .and. ((state%q(i,k,ixcldliq)+state%q(i,k,ixcldice)) > 1.e-5_r8 ) ) then
+          ! if ( (state%omega(i,k) <= -1.e-5_r8) .and. (state%q(i,k,ixnuc) > 1.e-5_r8 ) ) then 
               ptend%q(i,k,ixbcu) = (1.0_r8 - state%q(i,k,ixbcu))/ dt
           else 
               ptend%q(i,k,ixbcu) = -state%q(i,k,ixbcu) * bcu_scaling
@@ -372,17 +373,19 @@ contains
 
     ! -------------------- TRACER FLUXES --------------------
     do i = 1, ncol
-       ! ====== BCU ======
-       ! no surface flux
-       cflx(i,ixbcu) = 0._r8
-       ! ====== AOA ======
-       ! no surface flux
-       cflx(i,ixnuc) = 0._r8
        
        ! ====== AOA ======
        ! no surface flux
        cflx(i,ixaoa) = 0._r8
 
+       ! ====== BCU ======
+       ! no surface flux
+       cflx(i,ixbcu) = 0._r8
+       
+       ! ====== NUC ======
+       ! no surface flux
+       cflx(i,ixnuc) = 0._r8
+       
        ! ====== E90 ======
        ! surface flux handled in tendency computation above
        cflx(i,ixe90) = 0._r8
@@ -415,21 +418,19 @@ contains
     ! be number of GLL points, not number of physics columns
 
     if (masterproc) write(iulog,*) 'CLDERA PASSIVE CONSTITUENTS: INITIALIZING ',cnst_name(m),m
-
-    ! ====== NUC ======
-    if (m == ixnuc) then
-       q(:,:) = 0.0_r8
-    end if
-
-    ! ====== BCU ======
-    if (m == ixbcu) then
-       q(:,:) = 0.0_r8
-    end if 
     
     ! ====== AOA ======
     if (m == ixaoa) then
        q(:,:) = 0.0_r8
-
+    
+    ! ====== BCU ======
+    else if (m == ixbcu) then
+       q(:,:) = 0.0_r8
+       
+    ! ====== NUC ======
+    else if (m == ixnuc) then
+       q(:,:) = 0.0_r8
+       
     ! ====== E90 ======
     else if (m == ixe90) then
        q(:,:) = 0.0_r8

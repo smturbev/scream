@@ -1539,7 +1539,7 @@ else {
     }
 
     if ($cldera_passive_trcs eq "ON") {
-	$nadv += 3;
+	$nadv += 5;
         if ($print>=2) { print "Advected constituents added by the CLDERA passive tracers package: 4$eol"; }
     }
 

@@ -2729,7 +2729,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
             
          endif
      endif 
-     nnuc = ni_nucleat_tend
+     nnuc = dum-ni
    endif 
    
 end subroutine
