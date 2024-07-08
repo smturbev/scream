@@ -29,7 +29,8 @@ module cldera_passive_tracers
   use cam_logfile,    only: iulog
   use ref_pres,       only: pref_mid_norm
   use cam_abortutils, only: endrun
-  ! use micro_p3_interface, only: ixcldliq, ixcldice
+  use micro_p3_interface, only: ixcldliq, ixcldice
+  use cldera_passive_tracers_indices, only: ifirst, ixaoa, ixbcu, ixnuc, ixnucni, ixnucw
 
   implicit none
   private
@@ -47,14 +48,14 @@ module cldera_passive_tracers
   integer, parameter :: ncnst=5  ! number of constituents implemented by this module
 
   ! constituent names
-  character(len=8), parameter :: c_names(ncnst) = (/'AOA     ','BCU     ', 'NUC     ','E90j    ', 'ST80_25j'/)
+  character(len=8), parameter :: c_names(ncnst) = (/'AOA     ','BCU     ', 'NUC     ','NI_NUC  ', 'W_NUC  '/)
 
-  integer :: ifirst ! global index of first constituent
-  integer :: ixaoa  ! global index for AOA tracer
-  integer :: ixbcu  ! global index for BCU tracer
-  integer,public :: ixnuc  ! global index for NUC tracer
-  integer :: ixe90  ! global index for E90 tracer
-  integer :: ixst80 ! global index for ST80_25 tracer
+  ! integer :: ifirst ! global index of first constituent
+  ! integer :: ixaoa  ! global index for AOA tracer
+  ! integer :: ixbcu  ! global index for BCU tracer
+  ! integer, public :: ixnuc = -1  ! global index for NUC tracer
+  ! integer :: ixe90  ! global index for E90 tracer
+  ! integer :: ixst80 ! global index for ST80_25 tracer
 
   ! Data from namelist variables
   logical :: cldera_passive_tracers_flag  = .true.    ! true => turn on test tracer code, namelist variable
@@ -121,8 +122,9 @@ contains
     ixnuc = -1
     ixbcu = -1
     ixaoa = -1
-    ixe90 = -1
-    
+    ixnucni = -1
+    ixnucw = -1
+
     if (.not. cldera_passive_tracers_flag) return
 
     call cnst_add(c_names(1), mwdry, cpair, 0._r8, ixaoa,  readiv=cldera_passive_read_from_ic_file, &
@@ -132,10 +134,10 @@ contains
                   readiv=cldera_passive_read_from_ic_file, longname='Buoyant convective updraft tracer', mixtype='dry')
     call cnst_add(c_names(3), 28._r8/1000._r8, cpair, 0._r8, ixnuc, &
                   readiv=cldera_passive_read_from_ic_file, longname='Nucleation tracer', mixtype='dry')
-    call cnst_add(c_names(4), 28._r8/1000._r8, cpair, 0._r8, ixe90,  &
-                  readiv=cldera_passive_read_from_ic_file, longname='E90 tracer', mixtype='dry')
-    call cnst_add(c_names(5), 28._r8/1000._r8, cpair, 0._r8, ixst80, &
-                  readiv=cldera_passive_read_from_ic_file, longname='ST80_25 tracer', mixtype='dry')
+    call cnst_add(c_names(4), 28._r8/1000._r8, cpair, 0._r8, ixnucni,  &
+                  readiv=cldera_passive_read_from_ic_file, longname='Num ice at nucleation', mixtype='dry')
+    call cnst_add(c_names(5), 28._r8/1000._r8, cpair, 0._r8, ixnucw, &
+                  readiv=cldera_passive_read_from_ic_file, longname='W at nucleation', mixtype='dry')
     
   end subroutine cldera_passive_tracers_register
 
@@ -250,7 +252,7 @@ contains
     integer :: ncol              ! no. of column in chunk
     integer :: nstep             ! current timestep number
     integer :: trop_level(pcols) ! tropopause level for all columns 
-    integer :: ixcldliq, ixcldice ! from micro_p3_interface
+    ! integer :: ixcldliq, ixcldice ! from micro_p3_interface
     logical  :: lq(pcnst)
 
     integer  :: day,sec          ! date variables
@@ -258,11 +260,6 @@ contains
     real(r8) :: aoa_scaling      ! scale AOA1 from nstep to time
     real(r8) :: bcu_scaling      ! scale AOA1 from nstep to time
     real(r8) :: nuc_scaling      ! scale AOA1 from nstep to time
-
-    real(r8) :: efold_st80       ! e-folding timescale for e90 in s
-    real(r8) :: efold_e90        ! e-folding timescale for e90 in s
-    real(r8) :: mweight_e90      ! molecular weight of E90 in g/mol
-    real(r8) :: sflx_e90         ! surface flux of E90 in mol cm^-2 s^-1
 
     !------------------------------------------------------------------
 
@@ -276,8 +273,8 @@ contains
     lq(ixaoa)  = .TRUE.
     lq(ixbcu)  = .TRUE.
     lq(ixnuc)  = .TRUE.
-    lq(ixe90)  = .TRUE.
-    lq(ixst80) = .TRUE.
+    lq(ixnucni)  = .TRUE.
+    lq(ixnucw) = .TRUE.
     call physics_ptend_init(ptend,state%psetcols, 'cldera_passive_tracers', lq=lq)
 
     nstep = get_nstep()
@@ -287,34 +284,9 @@ contains
     ! ---- compute nuc and bcu time scaling (1 s in hours)
     nuc_scaling = 1._r8/3600._r8
     bcu_scaling = 1._r8/3600._r8
-    
+
     ! ---- compute AOA time scaling (1 s in days)
     aoa_scaling = 1._r8/86400._r8
-
-    ! ---- e-folding times for e90 (90 days in s), st80 (25 days in s)
-    efold_e90  = 90._r8 * 86400._r8
-    efold_st80 = 25._r8 * 86400._r8
-
-    ! ---- molecular weight and surface flux for e90
-    ! (surface flux matches Abalos+ (2017), molecular weight is for CO, matches
-    !  WACCM surface emissions specification in 
-    !  emissions_E90global_surface_1750-2100_0.9x1.25_c20170322.nc)
-    mweight_e90 = 28._r8                                   ! molecular weight of CO [g/mole]
-    sflx_e90    = 2.773063e11_r8                           ! [molecules cm^-2 s^-1]
-    sflx_e90    = sflx_e90 / (avogad / 1000)               ! [moles cm^-2 s^-1] 
-    ! convert mol to g, g to kg, cm^-2 to m^-2, ==>  flux in [kg m^-2 s^-1]
-    sflx_e90    = sflx_e90 * mweight_e90 * (1._r8/1000._r8) * 10000._r8
-
-    ! ---- identify tropopuase level
-    call tropopause_find(state, trop_level, primary=TROP_ALG_TWMO, backup=TROP_ALG_STOBIE)
-    ! Quit if tropopause is not found
-    if (any(trop_level(1:ncol) == NOTFOUND)) then
-       do i = 1, ncol
-          write(iulog,*)'tropopause level,state%lchnk,column:',trop_level(i),lchnk,i
-       enddo
-       call endrun('cldera_passive_tracers_timestep_tend: tropopause not found')
-    endif
-
 
     ! -------------------- TRACER TENDENCIES --------------------
     do k = 1, pver
@@ -333,8 +305,7 @@ contains
           ! clock tracer with a source of 1 hour everywhere in 
           ! a cloudy, rising parcel; set ptend
           ! else decay with timescale ~ 1 hour (3600 s)
-          if ( (state%omega(i,k) <= -1.e-5_r8) .and. ((state%q(i,k,ixcldliq)+state%q(i,k,ixcldice)) > 1.e-5_r8 ) ) then
-          ! if ( (state%omega(i,k) <= -1.e-5_r8) .and. (state%q(i,k,ixnuc) > 1.e-5_r8 ) ) then 
+          if ( (state%omega(i,k) <= -0.1_r8) .and. ((state%q(i,k,ixcldliq)+state%q(i,k,ixcldice)) > 1.e-5_r8 ) ) then
               ptend%q(i,k,ixbcu) = (1.0_r8 - state%q(i,k,ixbcu))/ dt
           else 
               ptend%q(i,k,ixbcu) = -state%q(i,k,ixbcu) * bcu_scaling
@@ -344,36 +315,13 @@ contains
           ! Decay everywhere here but reset tend in mphys (P3 interface)
           ! use this module and indices ixnuc then reset anytime we have fresh nucleation in P3
           ptend%q(i,k,ixnuc) = -state%q(i,k,ixnuc) * nuc_scaling
+          ! Decay everywhere for ixnucni and ixnucw at the same rate as ixnuc
+          ptend%q(i,k,ixnucni) = -state%q(i,k,ixnucni) * nuc_scaling
+          ptend%q(i,k,ixnucw)  = -state%q(i,k,ixnucw)  * nuc_scaling
 
-          ! ============ E90 ============
-          ! dissipates with e-folding time of 90 days
-          ptend%q(i,k,ixe90) =  -(1/efold_e90) * state%q(i, k, ixe90)
-          ! apply surface flux to lowest model level
-          ! this mimics behavior of vertical_diffusion_tend()
-          ! last line adjusts for dry constituent
-          if(k == pver) then
-              ptend%q(i, k, ixe90) = ptend%q(i, k, ixe90) + &
-                                     gravit * state%rpdel(i, k) * sflx_e90 * & 
-                                     state%pdel(i,k) / state%pdeldry(i, k)
-          end if
-
-          ! ============ ST80_25 ============
-          ! constant concentration of 200 ppbv above 80 hPa
-          if (state%pmid(i, k) <= 8000._r8) then
-              state%q(i, k, ixst80) = 200e-9_r8
-          end if
-          ! dissipates with e-folding time of 25 days below the tropopause
-          if (k >= trop_level(i)) then
-              ptend%q(i,k,ixst80) =  -(1/efold_st80) * state%q(i, k, ixst80)
-          else
-              ptend%q(i, k,ixst80) = 0._r8
-          end if
-       end do
-    end do
-
-    ! -------------------- TRACER FLUXES --------------------
+    ! --------------- TRACER FLUXES --------------------- 
     do i = 1, ncol
-       
+
        ! ====== AOA ======
        ! no surface flux
        cflx(i,ixaoa) = 0._r8
@@ -385,14 +333,8 @@ contains
        ! ====== NUC ======
        ! no surface flux
        cflx(i,ixnuc) = 0._r8
-       
-       ! ====== E90 ======
-       ! surface flux handled in tendency computation above
-       cflx(i,ixe90) = 0._r8
-
-       ! ====== ST80_25 ======
-       ! no surface flux
-       cflx(i,ixst80) = 0._r8
+       cflx(i,ixnucni) = 0._r8
+       cflx(i,ixnucw) = 0._r8
     end do
            
 
@@ -430,19 +372,10 @@ contains
     ! ====== NUC ======
     else if (m == ixnuc) then
        q(:,:) = 0.0_r8
-       
-    ! ====== E90 ======
-    else if (m == ixe90) then
+    else if (m == ixnucni) then
        q(:,:) = 0.0_r8
-
-    ! ====== ST80_25 ======
-    else if (m == ixst80) then
-       do k = 1, pver
-          if (pref_mid_norm(k) < 0.08) then
-              q(:, k) = 200e-9_r8  ! 200 ppbv to vmr above 80 hPa
-          end if
-       end do
-
+    else if (m == ixnucw) then
+       q(:,:) = 0.0_r8
     end if
 
   end subroutine init_cnst_3d

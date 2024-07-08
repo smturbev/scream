@@ -31,6 +31,7 @@ module micro_p3_interface
                             pbuf_set_field, pbuf_get_index, &
                             pbuf_old_tim_idx
   use ref_pres,       only: top_lev=>trop_cloud_top_lev
+  use cldera_passive_tracers_indices, only: ixnuc, ixnucni, ixnucw
   use phys_control,   only: phys_getopts
   use cam_abortutils, only: endrun
   use spmd_utils,     only: masterproc
@@ -43,7 +44,6 @@ module micro_p3_interface
   use cam_grid_support, only: cam_grid_check, cam_grid_id, cam_grid_get_dim_names
   use ncdio_atm,       only: infld
   use ppgrid,         only: begchunk, endchunk, pcols, pver, pverp,psubcols
-  use cldera_passive_tracers, only: ixnuc
 
   implicit none
   save
@@ -71,7 +71,6 @@ module micro_p3_interface
        ixcldrim = -1,   & ! rime index ??
        ixrimvol = -1,   & ! rime volume index ??
        ixqm  = -1       ! ?? index ??
-       ! ixnuc = -1         ! ice nuc tracer index
 
 !! pbuf
    integer :: &
@@ -97,8 +96,7 @@ module micro_p3_interface
       qv_prev_idx,        &
       t_prev_idx,         &
       accre_enhan_idx,    &
-      ccn3_idx,           &
-      ixnuc
+      ccn3_idx
 
 
 ! Physics buffer indices for fields registered by other modules
@@ -192,6 +190,7 @@ subroutine micro_p3_readnl(nlfile)
      write(iulog,'(A30,1x,8e12.4)') 'dep_scaling_small: ',     dep_scaling_small
      write(iulog,'(A30,1x,8e12.4)') 'sed_scaling_small: ',     sed_scaling_small
      write(iulog,'(A30,1x,8e12.4)') 'scale_all_ice: ',         scale_all_ice
+     write(iulog,'(A30,1x,i4)') 'ixnuc: ',         ixnuc
 
   end if
 
@@ -990,6 +989,11 @@ end subroutine micro_p3_readnl
     lq(ixcldrim)  = .true.
     lq(ixnumrain) = .true.
     lq(ixrimvol)  = .true.
+    if (ixnuc > 0) then
+        lq(ixnuc) = .true. ! set ixnuc to be updated if tracer is on
+        lq(ixnucni) = .true. ! set ixnucni to be updated if tracer is on
+        lq(ixnucw) = .true. ! set ixnuc to be updated if tracer is on
+    endif
     call physics_ptend_init(ptend, psetcols, "micro_p3", ls=.true., lq=lq)
 
     ! HANDLE AEROSOL ACTIVATION
@@ -1196,11 +1200,17 @@ end subroutine micro_p3_readnl
     ! over each timestep that fresh nucleation has not occurred. Fresh nuc set
     ! in ice nucleation. 
     if ( ixnuc > 0 ) then
-        lq(ixnuc) = .true. ! set ixnuc to be updated if tracer is on
+        if (masterproc) then
+            write(iulog,'(A30,1x,i4)') 'ixnuc: ',     ixnuc
+            write(iulog,'(A30,1x,e12.4)') 'max(tendout22): ',    maxval(tend_out(:,:,22))
+            write(iulog,'(A30,1x,e12.4)') 'min(tendout22): ',    minval(tend_out(:,:,22))
+        end if
         do k = 1,pver
             do icol = 1,ncol
-                if ( tend_out(icol,k,50)>0 ) then
+                if ( tend_out(icol,k,22)>0 ) then
                     ptend%q(icol,k,ixnuc) = (1.0_rtype - state%q(icol,k,ixnuc)) / dtime
+                    ptend%q(i,k,ixnucni) = (numice(i,k) - state%q(i,k,ixnucni)) / dtime
+                    ptend%q(i,k,ixnucw) = (uzpl(i,k)*factor_to_convert_to_w - state%q(i,k,ixnucw)) / dtime
                 end if
             end do
         end do
