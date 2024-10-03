@@ -93,7 +93,10 @@ def buildnml(case, caseroot, compname):
                         fncheck = "{}/{}.clm2{}.r.{}-{}.nc".format(rundir, run_refcase, inst_string, run_refdate, run_reftod)
                         if not os.path.exists(fncheck):
                             fncheck = "{}/{}.clm2.r.{}-{}.nc".format(rundir, run_refcase, run_refdate, run_reftod)
-                            expect(os.path.exists(fncheck), "ERROR mosart.buildnml: could not find restart file for branch or hybrid start")
+                            if not os.path.exists(fncheck):
+                                fncheck = "{}/{}.eam.r.{}-{}.nc".format(rundir, run_refcase, run_refdate, run_reftod)
+                                print(fncheck)
+                                expect(os.path.exists(fncheck), "ERROR mosart.buildnml: could not find restart file for branch or hybrid start")
 
             if run_type == "hybrid": infile_text += "finidat_rtm = '{}'\n".format(fncheck)
             if run_type == "branch": infile_text += "nrevsn_rtm  = '{}'\n".format(fncheck)

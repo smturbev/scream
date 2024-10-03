@@ -8,16 +8,7 @@
 ! General Circulation Models, Quarterly Journal of the Royal Meteorological Society,
 ! doi:10.1002/qj.3881.
 !
-! E90 tracer implemented as defined in:
-! Abalos, M. et al. (2017)
-! Using the Artificial Tracer e90 to Examine Present and Future UTLS Tracer Transport in WACCM, 
-! Journal of the Atmospheric Sciences,
-! doi:10.1175/JAS-D-17-0135.1.
 ! 
-! ST80_25 tracer implemented as defined in
-! Eyring, V. et al. (2013)
-! Overview of IGAC/SPARC Chemistry-Climate Model Initiative (CCMI) Community Simulations in 
-! Support of Upcoming Ozone and Climate Assessments
 !===============================================================================
 
 module cldera_passive_tracers
@@ -237,7 +228,6 @@ contains
     use time_manager,  only: get_nstep
     use ref_pres,      only: pref_mid_norm
     use time_manager,  only: get_curr_time
-    use tropopause,    only: tropopause_find, TROP_ALG_TWMO, TROP_ALG_STOBIE, NOTFOUND
 
     ! Arguments
     type(physics_state), intent(inout) :: state              ! state variables
@@ -251,8 +241,6 @@ contains
     integer :: lchnk             ! chunk identifier
     integer :: ncol              ! no. of column in chunk
     integer :: nstep             ! current timestep number
-    integer :: trop_level(pcols) ! tropopause level for all columns 
-    ! integer :: ixcldliq, ixcldice ! from micro_p3_interface
     logical  :: lq(pcnst)
 
     integer  :: day,sec          ! date variables
@@ -305,7 +293,8 @@ contains
           ! clock tracer with a source of 1 hour everywhere in 
           ! a cloudy, rising parcel; set ptend
           ! else decay with timescale ~ 1 hour (3600 s)
-          if ( (state%omega(i,k) <= -0.1_r8) .and. ((state%q(i,k,ixcldliq)+state%q(i,k,ixcldice)) > 1.e-5_r8 ) ) then
+          ! changed from -0.1 Pa/s to -1 Pa/s for testing branch run
+          if ( (state%omega(i,k) <= -1._r8) .and. ((state%q(i,k,ixcldliq)+state%q(i,k,ixcldice)) > 1.e-5_r8 ) ) then
               ptend%q(i,k,ixbcu) = (1.0_r8 - state%q(i,k,ixbcu))/ dt
           else 
               ptend%q(i,k,ixbcu) = -state%q(i,k,ixbcu) * bcu_scaling
@@ -318,6 +307,8 @@ contains
           ! Decay everywhere for ixnucni and ixnucw at the same rate as ixnuc
           ptend%q(i,k,ixnucni) = -state%q(i,k,ixnucni) * nuc_scaling
           ptend%q(i,k,ixnucw)  = -state%q(i,k,ixnucw)  * nuc_scaling
+       end do
+    end do
 
     ! --------------- TRACER FLUXES --------------------- 
     do i = 1, ncol

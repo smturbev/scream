@@ -741,7 +741,6 @@ end subroutine micro_p3_readnl
 
        !!
        !! precipitation fraction
-       !!
        IF (trim(method) == 'in_cloud') THEN
           DO k = ktop-kdir,kbot,-kdir
              DO i=its,ite
@@ -1200,17 +1199,12 @@ end subroutine micro_p3_readnl
     ! over each timestep that fresh nucleation has not occurred. Fresh nuc set
     ! in ice nucleation. 
     if ( ixnuc > 0 ) then
-        if (masterproc) then
-            write(iulog,'(A30,1x,i4)') 'ixnuc: ',     ixnuc
-            write(iulog,'(A30,1x,e12.4)') 'max(tendout22): ',    maxval(tend_out(:,:,22))
-            write(iulog,'(A30,1x,e12.4)') 'min(tendout22): ',    minval(tend_out(:,:,22))
-        end if
         do k = 1,pver
             do icol = 1,ncol
-                if ( tend_out(icol,k,22)>0 ) then
+                if ( tend_out(icol,k,22) > 0._rtype ) then ! 22 ni_nucleat_tend; 50 nnuc
                     ptend%q(icol,k,ixnuc) = (1.0_rtype - state%q(icol,k,ixnuc)) / dtime
-                    ptend%q(i,k,ixnucni) = (numice(i,k) - state%q(i,k,ixnucni)) / dtime
-                    ptend%q(i,k,ixnucw) = (uzpl(i,k)*factor_to_convert_to_w - state%q(i,k,ixnucw)) / dtime
+                    ptend%q(icol,k,ixnucni) = (numice(icol,k) - state%q(icol,k,ixnucni)) / dtime
+                    ptend%q(icol,k,ixnucw) = (state%omega(icol,k) - state%q(icol,k,ixnucw)) / dtime
                 end if
             end do
         end do

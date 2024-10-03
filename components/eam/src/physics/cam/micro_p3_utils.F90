@@ -45,11 +45,14 @@ module micro_p3_utils
                             !used this number as Liu and Penner, 2005
     real,public ::  NumCirrusINP = 2.e-3 !in units per cm3! BG added some reasonable background upper tropospheric dust/het ice nuclei value for cirrus conditions
                               !BG: based on simulated upper tropospheric (200 hPa) values of dust in Tropical Western Pacific for ECHAM-HAM GCM simulations
+    ! for new ice nucleation:
+    ! default settings dolp2005=true and lphom=true, all others false,
+    ! if you want to turn on cirrus mohler then also make noheticenuc true
     logical, public :: DoCiMohlerDep = .false.
-    logical, public :: DoLPHom = .false.
+    logical, public :: NoHetIceNuc = .false.
+    logical, public :: DoLPHom = .true.
     logical, public :: DoLP2005 = .true.
     logical, public :: NoLimits = .false.
-    logical, public :: NoHetIceNuc = .false.
     logical, public :: use_preexisting_ice_in = .false.
 
     real(rtype),public :: pi_e3sm

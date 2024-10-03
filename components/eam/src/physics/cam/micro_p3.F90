@@ -2622,7 +2622,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    real(rtype), intent(in) :: qv_supersat_l ! supersat wrt liquid
    real(rtype), intent(in) :: inv_dt        ! inverse of dt (timestep)
    real(rtype), intent(in) :: qc            ! cloud water mixing ratio (kg/kg)
-   real(rtype), intent(in) :: qi            ! cloud ice water mixing ratio (kg/kg)
+   real(rtype), intent(in) :: qi            ! cloud ice mixing ratio (kg/kg)
    real(rtype), intent(in) :: uzpl          ! vertical velocity (Pa/s)
    real(rtype), intent(in) :: p_atm         ! pressure (Pa)
    real(rtype), intent(in) :: cldi          ! cloud ice fraction
@@ -2656,22 +2656,20 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    
    !-------------------------------------------------------------------------------------
    ! Main ice nucleation code   
-   !  Three options:
+   !  Options:
    !   1. New scheme from Blaz, modified to work with P3
-   !   2. LP2005 HOM vs HET freezing
-   !   3. Default/basic - meyers or cooper freezing                                                 
+   !   2. Default/basic - meyers or cooper freezing                                                 
    !-------------------------------------------------------------------------------------
    
    if ( do_new_bg_lp_frz ) then
    
       ! use new code from Blaz
       
-      
       call nucleati_bg(w, t_atm, p_atm, qv_supersat_l+1._rtype, qv_supersat_i, &
                     qc, qi, ni, inv_rho, nsulf, ndust, do_meyers,  &
                     nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix,  & ! outputs bg
                     wpice, weff, fhom) ! outputs bg
-      
+
       N_nuc = max(0._rtype,nnuc*inv_dt) !pre-existing ice already accounted for
       !!!!! do we want nnuc_hom, etc. also to be divided by dt? before being output?
       if (N_nuc.ge.1.e-20_rtype) then
@@ -2679,24 +2677,6 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
          qinuc = Q_nuc
          ni_nucleat_tend = N_nuc
       endif
-      
-   !else if ( do_nucleate_ice_sc .eq. .true. ) then
-   
-      ! use built-in lp scheme from SCREAM from nucleate_ice.F90
-      ! ST modified to remove soot and extra aerosol info since we
-      !    are not interested in making more complex aerosol scheme rn
-      
-      ! call nucleati(w, t_atm, p_atm, qv_supersat_l+1._rtype, cldi, &
-      !              qc, qi, ni, 1/inv_rho, nsulf, ndust,         &
-      !              nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix,  & ! outputs sc
-      !              wpice, weff, fhom ) ! outputs sc
-      
-      !N_nuc = max(0._rtype,nnuc*inv_dt) !pre-existing ice already accounted for
-      !if (N_nuc.ge.1.e-20_rtype) then
-      !   Q_nuc = max(0._rtype,N_nuc*mi0)
-      !   qinuc = Q_nuc
-      !   ni_nucleat_tend = N_nuc
-      !endif
    
    else
    
@@ -2704,7 +2684,6 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
 
       if ( t_atm .lt.T_icenuc .and. qv_supersat_i.ge.0.05_rtype) then
          if(.not. do_predict_nc .or. do_prescribed_CCN) then
-         
             if ( do_meyers .eq. .true. ) then
                ! deposition/condensation nucleation in mixed clouds (Meyers, 1992)
                dum = exp(-0.639_rtype+12.96_rtype*qv_supersat_i) 
@@ -2712,7 +2691,6 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
                ! deposition/condensation nucleation in mixed clouds (Cooper 1986)
                dum = 0.005_rtype*exp(0.304_rtype*(T_zerodegc-t_atm))
             endif
-            
             dum = min(dum*1000._rtype*inv_rho,100000._rtype*inv_rho)
             N_nuc = max(0._rtype,(dum-ni)*inv_dt)
             if (N_nuc.ge.1.e-20_rtype) then
@@ -2720,18 +2698,14 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
                qinuc = Q_nuc
                ni_nucleat_tend = N_nuc
             endif
-            
          else
-         
             ! Ice nucleation predicted by aerosol scheme
             ni_nucleat_tend = max(0._rtype, (ni_activated - ni)*inv_dt)
             qinuc = ni_nucleat_tend * mi0
-            
          endif
-     endif 
-     nnuc = dum-ni
+     endif
+     
    endif 
-   
 end subroutine
 
 subroutine nucleati_bg(  &
@@ -2802,14 +2776,25 @@ subroutine nucleati_bg(  &
    real(rtype) :: Shom             ! initial ice saturation ratio; if <1, use hom threshold Si
    real(rtype) :: detaT,RHimean    ! temperature standard deviation, mean cloudy RHi
    real(rtype) :: wpicehet         ! diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at shet
-
    real(rtype) :: weffhet   ! effective Vertical velocity for ice nucleation (m/s)  weff=wbar-wpicehet 
+   
    logical(btype) :: use_preexisting_ice
    logical(btype) :: do_ci_mohler_dep
    logical(btype) :: do_lphom
    logical(btype) :: do_lp2005
    logical(btype) :: no_limits
    logical(btype) :: no_het_ice_nuc
+
+   logical(btype) :: nuc_mix_flag
+   logical(btype) :: nuc_lp2005_flag
+   logical(btype) :: nuc_moh_flag
+   logical(btype) :: nuc_lphom_flag
+
+   ! set flags for nnuc to true
+   nuc_mix_flag = .true.
+   nuc_lp2005_flag = .true.
+   nuc_moh_flag = .true.
+   nuc_lphom_flag = .true.
 
    !-------------------------------------------------------------------------------
 
@@ -2851,6 +2836,11 @@ subroutine nucleati_bg(  &
            ! deposition/condensation nucleation in mixed clouds (Cooper 1986)
            nimix = 0.005_rtype*exp(0.304_rtype*tc)*1.e-3_rtype ! cm-3
         endif
+
+        if (nuc_mix_flag) then
+           if (masterproc) write(iulog,*) "in mixed phase, nnuc1/t_atm =", nimix, tc
+           nuc_mix_flag = .false.
+         end if
           
    endif
         
@@ -2861,7 +2851,7 @@ subroutine nucleati_bg(  &
         ! deposition/condensation-freezing nucleation for CIRRUS
         ! following Mohler et al., 2006 lab results for dust deposition freezing
         ! this should be false when you allow HET frz in LP competition - WHY?
-         
+        
         if (tc.lt.-53._rtype) then 
            scrit=0.1_rtype !critical supersaturation for T<-53degC
         else
@@ -2873,6 +2863,11 @@ subroutine nucleati_bg(  &
         else if ( (tc.lt.-37_rtype) .and. (supersat_i.ge.scrit) ) then
            nimoh = dst_num ! #/cm3
         endif 
+
+        if (nuc_moh_flag) then
+           if (masterproc) write(iulog,*) "in cirrus mohler, nnuc2/t_atm/qv_supersat_i/l =", nimoh, tc, supersat_i, relhum
+           nuc_moh_flag = .false.
+         end if
    endif ! mohler 
    
    !---LP-HOM----------------------------------------------------------------------------
@@ -2881,17 +2876,24 @@ subroutine nucleati_bg(  &
          
          ! HOM freezing only
          ! following Liu & Penner, 2005 (LP2005)
-         
          if ( (tc.lt.-37._rtype)  .and. (supersat_i.ge.0.42_rtype) ) then 
             ! BG added some very conservative supi condition not to always go in that loop
             call hf(tc, wbar1, relhum, so4_num, nilphf)
+            if (nuc_lphom_flag) then
+                if (masterproc) write(iulog,*) "in lphom, nnuc/t_atm/qv_supersat_i/l =", nilphf, tc, supersat_i, relhum
+                nuc_lphom_flag = .false.
+            end if
          endif  
+         
+
+         
       
    endif ! do_lphom_ice_nucleation
    
    !---LP2005-HOM-HET-----------------------------------------------------------------------
       
    if ( do_lp2005 .eq. .true. ) then
+
       ! temp variables that depend on use_preexisting_ice
       wbar1 = wbar
       wbar2 = wbar
@@ -2929,9 +2931,10 @@ subroutine nucleati_bg(  &
 
       end if
 
-      ni = 0._rtype
+      
 
       ! initialize
+      ni = 0._rtype
       niimm = 0._rtype
       nidep = 0._rtype
       nihf  = 0._rtype
@@ -2947,23 +2950,17 @@ subroutine nucleati_bg(  &
 
          A = -1.4938_rtype * log(dst_num) + 12.884_rtype
          B = -10.41_rtype  * log(dst_num) - 67.69_rtype
-
          regm = A * log(wbar1) + B ! Blaz' found that a factor of 0.8 in this regm term 
                                    !  makes LP more more realistic like Karcher 2022
                                    !  to do: run with 0.8 * regm
 
          if ( tc .gt. regm ) then
-       
             ! heterogeneous nucleation only
-
             if ( tc.lt.-40._rtype .and. wbar1.gt.1._rtype ) then 
-           
                ! exclude T<-40 & W>1m/s from hetero. nucleation
-
                call hf(tc,wbar1,relhum,so4_num,nihf)
                niimm=0._rtype
                nidep=0._rtype
-
                if (use_preexisting_ice) then
                   if (nihf.gt.1e-3_rtype) then ! hom occur,  add preexisting ice
                      niimm=min(dst_num,Ni_preice*1e-6_rtype)       ! assuming dst_num freeze firstly
@@ -2974,31 +2971,22 @@ subroutine nucleati_bg(  &
                else
                   n1=nihf
                end if
-
             else
-
                call hetero(tc,wbar2,dst_num,niimm,nidep)
-             
                if (use_preexisting_ice) then
                   if (niimm .gt. 1e-6_rtype) then ! het freezing occur, add preexisting ice
                      niimm = niimm + Ni_preice*1e-6_rtype
                      niimm = min(dst_num, niimm)        ! niimm < dst_num 
                   end if
                end if
-             
                nihf=0._rtype
                n1=niimm+nidep
-
             endif
-
          else if (tc.lt.regm-5._rtype) then
-       
             ! homogeneous nucleation only
-
             call hf(tc,wbar1,relhum,so4_num,nihf)
             niimm=0._rtype
             nidep=0._rtype
-
             if (use_preexisting_ice) then
                if (nihf.gt.1e-3_rtype) then !  hom occur,  add preexisting ice
                   niimm=min(dst_num,Ni_preice*1e-6_rtype)       ! assuming dst_num freeze firstly
@@ -3009,19 +2997,13 @@ subroutine nucleati_bg(  &
             else
                n1=nihf
             end if
-
          else
-       
             ! transition between homogeneous and heterogeneous: interpolate in-between
-
             if (tc.lt.-40._rtype .and. wbar1.gt.1._rtype) then 
-          
                ! exclude T<-40 & W>1m/s from hetero. nucleation
-
                call hf(tc, wbar1, relhum, so4_num, nihf)
                niimm = 0._rtype
                nidep = 0._rtype
-
                if (use_preexisting_ice) then
                   if (nihf .gt. 1e-3_rtype) then ! hom occur,  add preexisting ice
                      niimm = min(dst_num, Ni_preice*1e-6_rtype)       ! assuming dst_num freeze firstly
@@ -3032,24 +3014,18 @@ subroutine nucleati_bg(  &
                else
                   n1 = nihf
                end if
-
             else
-          
                ! hetero. and homog. nucleation compete
-
                call hf(regm-5._rtype,wbar1,relhum,so4_num,nihf)
                call hetero(regm,wbar2,dst_num,niimm,nidep)
-
                if (use_preexisting_ice) then
                   nihf = nihf*fhom
                end if
-
                if (nihf .le. (niimm+nidep)) then
                   n1 = nihf
                else
                   n1=(niimm+nidep)*((niimm+nidep)/nihf)**((tc-regm)/5._rtype)
                endif
-
                if (use_preexisting_ice) then
                   if (n1 .gt. 1e-3_rtype) then   ! add preexisting ice
                      n1    = n1 + Ni_preice*1e-6_rtype
@@ -3063,37 +3039,33 @@ subroutine nucleati_bg(  &
                end if
             end if
          end if ! regimes for hom, het, hom vs het
-
          ni = n1
-
       end if ! temp, supersat_i, wbar1 thresholding
+      ! impose limits
+       if ( no_limits .eq. .false.) then
+          nimix = min(nimix,150.e+3_rtype) !BG increased max limit from 100 to 150/L
+          nimoh = min(nimoh,100.e+3_rtype) !max to 100/L
+          nilphf = min(nilphf,80.e+6_rtype)!max to 80,000/L
+          ni = min(ni,80.e+6_rtype)        !max to 80,000/L
+       endif
+       
+       nuci=ni+nimix+nimoh+nilphf
+       
+       if ( (nuci.gt.99999._rtype) .or. (nuci.lt.0._rtype) ) then
+          write(iulog,*) 'Warning: incorrect ice nucleation number (nuci reset =0)'
+          write(iulog,*) nuci, ni, nihf, niimm, nidep, nimix, nimoh, nilphf, tair, relhum, wbar, deles, esi, dst_num, so4_num
+          nuci=0._rtype
+       endif
+    
+       ! change unit from #/cm3 to #/kg
+       nuci   = nuci*1.e+6_rtype*inv_rho
+       onimix = nimix*1.e+6_rtype*inv_rho
+       onidep = (nidep+nimoh)*1.e+6_rtype*inv_rho
+       oniimm = niimm*1.e+6_rtype*inv_rho
+       onihf  = (nihf+nilphf)*1.e+6_rtype*inv_rho
    end if ! new_bg_lp_frz
 
    !---end----------------------------------------------------
-
-   ! impose limits
-   if ( no_limits .eq. .true.) then
-      nimix = min(nimix,150.e+3_rtype) !BG increased max limit from 100 to 150/L
-      nimoh = min(nimoh,100.e+3_rtype) !max to 100/L
-      nilphf = min(nilphf,80.e+6_rtype)!max to 80,000/L
-      ni = min(ni,80.e+6_rtype)        !max to 80,000/L
-   endif
-   
-   nuci=ni+nimix+nimoh+nilphf
-   
-   if ( (nuci.gt.99999._rtype) .or. (nuci.lt.0._rtype) ) then
-      write(iulog, *) 'Warning: incorrect ice nucleation number (nuci reset =0)'
-      write(iulog, *) nuci, ni, nihf, niimm, nidep, nimix, nimoh, nilphf, tair, relhum, wbar, deles, esi, dst_num, so4_num
-      nuci=0._rtype
-   endif
-   
-
-   ! change unit from #/cm3 to #/kg
-   nuci   = nuci*1.e+6_rtype*inv_rho
-   onimix = nimix*1.e+6_rtype*inv_rho
-   onidep = (nidep+nimoh)*1.e+6_rtype*inv_rho
-   oniimm = niimm*1.e+6_rtype*inv_rho
-   onihf  = (nihf+nilphf)*1.e+6_rtype*inv_rho
 
 end subroutine nucleati_bg
 
@@ -3114,6 +3086,10 @@ subroutine hf(T,ww,supersat,Na,Ni) !tc , w, qv_supersat_l, nsulf, nihom
        real(rtype) ::    regm
        real(rtype) ::    A,B,C
        real(rtype) ::    Sw
+
+       logical(btype) :: nuc_hom_flag
+       nuc_hom_flag = .true.
+       
   !print*, 'we are in homogfrz'
   !print*, T, 'temp in homogfrz'
   !print*, ww,'vertv in homogfrz'
@@ -3181,6 +3157,10 @@ subroutine hf(T,ww,supersat,Na,Ni) !tc , w, qv_supersat_l, nsulf, nihom
          endif
 
        end if
+       if (nuc_hom_flag) then
+         if (masterproc) write(iulog,*) "in hom, nnuc/t_atm/qv_supersat_i =", Ni, T, supersat
+         nuc_hom_flag = .false.
+       end if
      !print*, 'in call hf: Sw > Sw_crit? Ni', (supersat.ge.Sw), Ni
 
 end subroutine hf
@@ -3193,6 +3173,9 @@ subroutine hetero(tc,ww,Ns,Nis,Nid)
 
     real(rtype) :: A11,A12,A21,A22,B11,B12,B21,B22
     real(rtype) :: B,C
+
+    logical(btype) :: nuc_het_flag
+    nuc_het_flag = .true.
 
 !---------------------------------------------------------------------
 ! parameters
@@ -3217,6 +3200,10 @@ subroutine hetero(tc,ww,Ns,Nis,Nid)
 
       Nid = 0.0_rtype    ! don't include deposition nucleation for cirrus clouds when T<-37C
       ! BG we assume the current het freezing represents in some sense both het by imm and depo
+      if (nuc_het_flag) then
+         if (masterproc) write(iulog,*) "in het, nnuc/t_atm/w =", Nis, tc, ww
+         nuc_het_flag = .false.
+      end if
 end subroutine hetero
 
 
@@ -3585,8 +3572,8 @@ end subroutine frachom
 !
 !    nuci=ni+nimey
 !    if(nuci.gt.9999._rtype.or.nuci.lt.0._rtype) then
-!       write(iulog, *) 'Warning: incorrect ice nucleation number (nuci reset =0)'
-!       write(iulog, *) ni, tair, relhum, wbar, nihf, niimm, nidep,deles,esi,dst_num,so4_num
+!       write(iulog,*) 'Warning: incorrect ice nucleation number (nuci reset =0)'
+!       write(iulog,*) ni, tair, relhum, wbar, nihf, niimm, nidep,deles,esi,dst_num,so4_num
 !       nuci=0._rtype
 !    endif
 !
