@@ -1320,6 +1320,7 @@ end subroutine micro_p3_readnl
 
    rho(:ncol,top_lev:) = &
       state%pmid(:ncol,top_lev:) / (rair*temp(:ncol,top_lev:))
+
    ! ------------------------------------------------------------ !
    ! Compute in cloud ice and liquid mixing ratios                !
    ! Note that 'iclwp, iciwp' are used for radiation computation. !

@@ -22,6 +22,7 @@ module cldera_passive_tracers
   use cam_abortutils, only: endrun
   use micro_p3_interface, only: ixcldliq, ixcldice
   use cldera_passive_tracers_indices, only: ifirst, ixaoa, ixbcu, ixnuc, ixnucni, ixnucw
+  use physconst,      only: rair
 
   implicit none
   private
@@ -244,10 +245,11 @@ contains
     logical  :: lq(pcnst)
 
     integer  :: day,sec          ! date variables
-    real(r8) :: t                ! tracer boundary condition
+    real(r8) :: t              ! tracer boundary condition
     real(r8) :: aoa_scaling      ! scale AOA1 from nstep to time
     real(r8) :: bcu_scaling      ! scale AOA1 from nstep to time
     real(r8) :: nuc_scaling      ! scale AOA1 from nstep to time
+    real(r8) :: w                ! vertical velocity (from omega)
 
     !------------------------------------------------------------------
 
@@ -293,8 +295,11 @@ contains
           ! clock tracer with a source of 1 hour everywhere in 
           ! a cloudy, rising parcel; set ptend
           ! else decay with timescale ~ 1 hour (3600 s)
-          ! changed from -0.1 Pa/s to -1 Pa/s for testing branch run
-          if ( (state%omega(i,k) <= -1._r8) .and. ((state%q(i,k,ixcldliq)+state%q(i,k,ixcldice)) > 1.e-5_r8 ) ) then
+
+          w = - (state%omega(i,k)) / (state%pmid(i,k)) * rair*(state%t(i,k)) * 0.102_r8 ! omega * 1/rho * 1/g  [m/s]; rho = p / (R*t) => 1/rho = R*t/p
+          !  w1 = - state%omega(i,k) * 1/state%rho(i,k) * 0.102_rtype ! omega * 1/rho * 1/g  [m/s]
+          if ( ( w > 1._r8 ) .and. ((state%q(i,k,ixcldliq)+state%q(i,k,ixcldice)) > 1.e-5_r8 ) ) then
+              ! write(iulog,*) 'omega/w', state%omega(i,k), w
               ptend%q(i,k,ixbcu) = (1.0_r8 - state%q(i,k,ixbcu))/ dt
           else 
               ptend%q(i,k,ixbcu) = -state%q(i,k,ixbcu) * bcu_scaling
