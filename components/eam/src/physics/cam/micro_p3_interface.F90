@@ -915,7 +915,7 @@ end subroutine micro_p3_readnl
     integer :: psetcols, lchnk
     integer :: itim_old
     real(rtype) :: T_virtual
-
+    real(rtype) :: w                   !used for w_nuc tracer
     ! For rrtmg optics. specified distribution.
     real(rtype), parameter :: dcon   = 25.e-6_rtype         ! Convective size distribution effective radius (um)
     real(rtype), parameter :: mucon  = 5.3_rtype            ! Convective size distribution shape parameter
@@ -1204,7 +1204,8 @@ end subroutine micro_p3_readnl
                 if ( tend_out(icol,k,22) > 0._rtype ) then ! 22 ni_nucleat_tend; 50 nnuc
                     ptend%q(icol,k,ixnuc) = (1.0_rtype - state%q(icol,k,ixnuc)) / dtime
                     ptend%q(icol,k,ixnucni) = (numice(icol,k) - state%q(icol,k,ixnucni)) / dtime
-                    ptend%q(icol,k,ixnucw) = (state%omega(icol,k) - state%q(icol,k,ixnucw)) / dtime
+                    w = - (state%omega(icol,k)) / (state%pmid(icol,k)) * rair*(state%t(icol,k)) * 0.102_rtype ! omega * 1/rho * 1/g  [m/s]; rho = p / (R*t) => 1/rho = R*t/p
+                    ptend%q(icol,k,ixnucw) = (w - state%q(icol,k,ixnucw)) / dtime
                 end if
             end do
         end do
