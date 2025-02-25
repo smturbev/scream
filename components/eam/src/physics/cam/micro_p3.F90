@@ -2878,7 +2878,7 @@ subroutine nucleati_bg(  &
          ! following Liu & Penner, 2005 (LP2005)
          if ( (tc.lt.-37._rtype)  .and. (supersat_i.ge.0.42_rtype) ) then 
             ! BG added some very conservative supi condition not to always go in that loop
-            call hf(tc, wbar1, relhum, so4_num, nilphf)
+            call hf(tc, wbar, relhum, so4_num, nilphf)
             if (nuc_lphom_flag) then
                 if (masterproc) write(iulog,*) "in lphom, nnuc/t_atm/qv_supersat_i/l =", nilphf, tc, supersat_i, relhum
                 nuc_lphom_flag = .false.
