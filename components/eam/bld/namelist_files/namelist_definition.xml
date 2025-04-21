@@ -2284,6 +2284,13 @@ Specify if the new ice nucleation developed by Blaz Gasparini
 using LP2005is used in P3 microphysics scheme.
 Default: FALSE
 </entry>
+
+<entry id="no_icnc_limits" type="logical" category="microphy"
+       group="micro_nl" valid_values="" >
+Specify if the ice nucleation does not use the default limits
+on ice crystal number concentration.
+Default: FALSE
+</entry>
     
 <entry id="sed_scaling_small" type="real" category="microphys"
        group="micro_nl" valid_values="" >

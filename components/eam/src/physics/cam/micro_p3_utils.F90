@@ -52,7 +52,7 @@ module micro_p3_utils
     logical, public :: NoHetIceNuc = .false.
     logical, public :: DoLPHom = .true.
     logical, public :: DoLP2005 = .true.
-    logical, public :: NoLimits = .false.
+    logical, public :: NoLimits = .true.
     logical, public :: use_preexisting_ice_in = .false.
 
     real(rtype),public :: pi_e3sm

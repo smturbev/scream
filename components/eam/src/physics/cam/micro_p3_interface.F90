@@ -132,7 +132,8 @@ module micro_p3_interface
    logical            :: micro_tend_output       = .true.    ! Default microphysics tendencies to output file
    logical            :: do_prescribed_CCN       = .false.   ! Use prescribed CCN
    logical            :: do_meyers               = .false.   ! default to cooper for ice nucleation
-   logical            :: do_new_bg_lp_frz        = .false.   ! uses nucleate_ice_bg.f90
+   logical            :: do_new_bg_lp_frz        = .false.   ! Use updated LP2005 mphys
+   logical            :: no_icnc_limits          = .false.   ! default icnc limits in ice nucleation
    logical            :: do_nucleate_ice_sc      = .false.   ! uses nucleate_ice.f90
    logical            :: use_preexisting_ice     = .false.   ! account for pre-existing ice or not
    real(rtype)        :: dep_scaling_small       = huge(1.0_rtype)
@@ -156,7 +157,7 @@ subroutine micro_p3_readnl(nlfile)
   namelist /micro_nl/ &
        micro_p3_tableversion, micro_p3_lookup_dir, micro_aerosolactivation, micro_subgrid_cloud, &
        micro_tend_output, p3_qc_autocon_expon, p3_qc_accret_expon, do_prescribed_CCN, do_meyers, &
-       do_new_bg_lp_frz, do_nucleate_ice_sc, use_preexisting_ice, dep_scaling_small, sed_scaling_small, &
+       do_new_bg_lp_frz, no_icnc_limits, do_nucleate_ice_sc, use_preexisting_ice, dep_scaling_small, sed_scaling_small, &
        scale_all_ice
 
   !-----------------------------------------------------------------------------
@@ -185,6 +186,7 @@ subroutine micro_p3_readnl(nlfile)
      write(iulog,'(A30,1x,L)')    'do_prescribed_CCN: ',       do_prescribed_CCN
      write(iulog,'(A30,1x,L)')    'do_meyers: ',               do_meyers
      write(iulog,'(A30,1x,L)')    'do_new_bg_lp_frz: ',        do_new_bg_lp_frz
+     write(iulog,'(A30,1x,L)')    'no_icnc_limits: ',          no_icnc_limits
      write(iulog,'(A30,1x,L)')    'do_nucleate_ice_sc: ',      do_nucleate_ice_sc
      write(iulog,'(A30,1x,L)')    'use_preexisting_ice: ',     use_preexisting_ice
      write(iulog,'(A30,1x,8e12.4)') 'dep_scaling_small: ',     dep_scaling_small
@@ -206,6 +208,7 @@ subroutine micro_p3_readnl(nlfile)
   call mpibcast(do_prescribed_CCN,       1,                          mpilog,  0, mpicom)
   call mpibcast(do_meyers,               1,                          mpilog,  0, mpicom)
   call mpibcast(do_new_bg_lp_frz,        1,                          mpilog,  0, mpicom)
+  call mpibcast(no_icnc_limits,          1,                          mpilog,  0, mpicom)
   call mpibcast(do_nucleate_ice_sc,      1,                          mpilog,  0, mpicom)
   call mpibcast(use_preexisting_ice,     1,                          mpilog,  0, mpicom)
   call mpibcast(dep_scaling_small,       1,                          mpir8,   0, mpicom)
@@ -1166,6 +1169,7 @@ end subroutine micro_p3_readnl
          do_prescribed_CCN,           & ! IN
          do_meyers,                   & ! IN     .false.=default cooper frzing, else meyers
          do_new_bg_lp_frz,            & ! IN - use nucleate_ice_bg.f90
+         no_icnc_limits,              & ! IN     do not use the limits on ice nucleation concentrations
          dep_scaling_small,           & ! IN     scaling factor for vapor deposition on small ice particles
          sed_scaling_small,           & ! IN     scaling factor for ice sedimentation on small ice particles
          scale_all_ice,               & ! IN     determines if we scale all ice or small ice only for dep/sed scaling rates

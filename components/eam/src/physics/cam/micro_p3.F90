@@ -467,7 +467,7 @@ contains
   END SUBROUTINE p3_main_part1
 
   SUBROUTINE p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
-       do_meyers, do_new_bg_lp_frz, dep_scaling_small, scale_all_ice, & ! added for ice_deposition_sublimation -ST 
+       do_meyers, do_new_bg_lp_frz, no_limits, dep_scaling_small, scale_all_ice, & ! added for ice_deposition_sublimation -ST 
        dt, inv_dt, pres, inv_exner, inv_cld_frac_l, inv_cld_frac_i, inv_cld_frac_r, ni_activated, &
        inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, uzpl, & 
        t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_l, qv_supersat_i, rhofaci, acn, qv, th_atm, qc, nc, qr, nr, qi, ni, &
@@ -482,7 +482,7 @@ contains
     ! args
 
     integer, intent(in) :: kts, kte, kbot, ktop, kdir
-    logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz
+    logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, no_limits
     real(rtype), intent(in) :: dt, inv_dt, dep_scaling_small
     logical(btype), intent(in) :: scale_all_ice
 
@@ -774,7 +774,7 @@ contains
            ni(k),ni_activated(k),qv_supersat_l(k),qv_supersat_i(k), &
            inv_dt,qc(k),qi(k),uzpl(k),pres(k), cld_frac_i(k), &
            do_predict_nc, do_prescribed_CCN, do_meyers,  &
-           do_new_bg_lp_frz, &
+           do_new_bg_lp_frz, no_limits, &
            qinuc, ni_nucleat_tend,  &
            nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix, wpice, weff, fhom)
 
@@ -1149,7 +1149,7 @@ contains
 
   SUBROUTINE p3_main(qc,nc,qr,nr,th_atm,qv,dt,qi,qm,ni,bm,   &
        pres,dz,nc_nuceat_tend,nccn_prescribed,ni_activated,inv_qc_relvar,it,precip_liq_surf,precip_ice_surf,its,ite,kts,kte,diag_eff_radius_qc,     &
-       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, dep_scaling_small, sed_scaling_small, scale_all_ice, &
+       diag_eff_radius_qi,rho_qi,do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, no_limits, dep_scaling_small, sed_scaling_small, scale_all_ice, &
        uzpl, dpres,inv_exner,qv2qi_depos_tend,precip_total_tend,nevapr,qr_evap_tend,precip_liq_flux,precip_ice_flux,cld_frac_r,cld_frac_l,cld_frac_i,  &
        p3_tend_out,mu_c,lamc,liq_ice_exchange,vap_liq_exchange, &
        vap_ice_exchange,qv_prev,t_prev,col_location &
@@ -1225,7 +1225,7 @@ contains
     real(rtype), intent(out),   dimension(its:ite,kts:kte)      :: vap_ice_exchange ! sum of vap-ice phase change tendenices
 
     ! INPUT for prescribed ice nucleation options
-    logical(btype), intent(in)                                  :: do_prescribed_CCN, do_meyers, do_new_bg_lp_frz
+    logical(btype), intent(in)                                  :: do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, no_limits
     
     ! INPUT for scaling factor in ice vapor deposition & sedimentation -ST
     ! set in micro_p3_interface.F90
@@ -1401,7 +1401,7 @@ contains
        if (.not. (is_nucleat_possible .or. is_hydromet_present)) goto 333
 
        call p3_main_part2(kts, kte, kbot, ktop, kdir, do_predict_nc, do_prescribed_CCN, &
-            do_meyers, do_new_bg_lp_frz, dep_scaling_small, scale_all_ice, &
+            do_meyers, do_new_bg_lp_frz, no_limits, dep_scaling_small, scale_all_ice, &
             dt, inv_dt, &
             pres(i,:), inv_exner(i,:), &
             inv_cld_frac_l(i,:), inv_cld_frac_i(i,:), inv_cld_frac_r(i,:), ni_activated(i,:), inv_qc_relvar(i,:), &
@@ -2603,7 +2603,7 @@ end subroutine rain_immersion_freezing
 
 
 subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_supersat_i, inv_dt, &
-   qc, qi, uzpl, p_atm, cldi, do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, &
+   qc, qi, uzpl, p_atm, cldi, do_predict_nc, do_prescribed_CCN, do_meyers, do_new_bg_lp_frz, no_limits, &
    qinuc, ni_nucleat_tend, nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix, wpice, weff, fhom)
    
 
@@ -2627,7 +2627,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    real(rtype), intent(in) :: p_atm         ! pressure (Pa)
    real(rtype), intent(in) :: cldi          ! cloud ice fraction
    logical(btype), intent(in) :: do_predict_nc, do_prescribed_CCN, do_meyers
-   logical(btype), intent(in) :: do_new_bg_lp_frz
+   logical(btype), intent(in) :: do_new_bg_lp_frz, no_limits
 
    real(rtype), intent(inout) :: qinuc
    real(rtype), intent(inout) :: ni_nucleat_tend
@@ -2638,7 +2638,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    ! local variables
    real(rtype) :: dum, N_nuc, Q_nuc
    real(rtype) :: ndust, nsulf, qsmall, w, niimm, nidep, nihf, scrit ! for new BG code
-   logical(btype) :: do_ci_mohler_dep, do_lphom, no_limits
+   logical(btype) :: do_ci_mohler_dep, do_lphom
    real(rtype) :: wbar1, wbar2, deles, esi, A, B, regm, n1, tc ! work variables
 
    ! convert uzpl to w (Pa/s -> m/s)
@@ -2652,7 +2652,6 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
    ndust = NumCirrusINP
    do_ci_mohler_dep = DoCiMohlerDep
    do_lphom = DoLPHom
-   no_limits = NoLimits
    
    !-------------------------------------------------------------------------------------
    ! Main ice nucleation code   
@@ -2666,7 +2665,7 @@ subroutine ice_nucleation(t_atm, inv_rho, ni, ni_activated, qv_supersat_l, qv_su
       ! use new code from Blaz
       
       call nucleati_bg(w, t_atm, p_atm, qv_supersat_l+1._rtype, qv_supersat_i, &
-                    qc, qi, ni, inv_rho, nsulf, ndust, do_meyers,  &
+                    qc, qi, ni, inv_rho, nsulf, ndust, do_meyers, no_limits, &
                     nnuc, nnuc_hom, nnuc_imm, nnuc_dep, nnuc_mix,  & ! outputs bg
                     wpice, weff, fhom) ! outputs bg
 
@@ -2711,7 +2710,7 @@ end subroutine
 subroutine nucleati_bg(  &
    wbar, tair, pmid, relhum, supersat_i,&
    qc, qi, ni_pre, inv_rho,             &
-   so4_num, dst_num, do_meyers,         &
+   so4_num, dst_num, do_meyers, no_limits,  &
    nuci, onihf, oniimm, onidep, onimix, &
    wpice, weff, fhom )
 
@@ -2742,6 +2741,7 @@ subroutine nucleati_bg(  &
    real(rtype), intent(in) :: so4_num     ! so4 aerosol number (#/cm^3)
    real(rtype), intent(in) :: dst_num     ! total dust aerosol number (#/cm^3)
    logical,  intent(in)    :: do_meyers   ! meyers or cooper
+   logical,  intent(in)    :: no_limits   ! meyers or cooper
    
    ! Output Arguments
    real(rtype), intent(out) :: nuci       ! ice number nucleated (#/kg)
@@ -2782,19 +2782,20 @@ subroutine nucleati_bg(  &
    logical(btype) :: do_ci_mohler_dep
    logical(btype) :: do_lphom
    logical(btype) :: do_lp2005
-   logical(btype) :: no_limits
    logical(btype) :: no_het_ice_nuc
 
    logical(btype) :: nuc_mix_flag
    logical(btype) :: nuc_lp2005_flag
    logical(btype) :: nuc_moh_flag
    logical(btype) :: nuc_lphom_flag
+   logical(btype) :: lims_flag
 
    ! set flags for nnuc to true
    nuc_mix_flag = .true.
    nuc_lp2005_flag = .true.
    nuc_moh_flag = .true.
    nuc_lphom_flag = .true.
+   lims_flag = .true.
 
    !-------------------------------------------------------------------------------
 
@@ -2879,10 +2880,10 @@ subroutine nucleati_bg(  &
          if ( (tc.lt.-37._rtype)  .and. (supersat_i.ge.0.42_rtype) ) then 
             ! BG added some very conservative supi condition not to always go in that loop
             call hf(tc, wbar, relhum, so4_num, nilphf)
-            if (nuc_lphom_flag) then
-                if (masterproc) write(iulog,*) "in lphom, nnuc/t_atm/qv_supersat_i/l =", nilphf, tc, supersat_i, relhum
-                nuc_lphom_flag = .false.
-            end if
+            !if (nuc_lphom_flag) then
+            !    if (masterproc) write(iulog,*) "in lphom, nnuc/t_atm/qv_supersat_i/l =", nilphf, tc, supersat_i, relhum
+            !    nuc_lphom_flag = .false.
+            !end if
          endif  
          
 
@@ -3047,6 +3048,9 @@ subroutine nucleati_bg(  &
           nimoh = min(nimoh,100.e+3_rtype) !max to 100/L
           nilphf = min(nilphf,80.e+6_rtype)!max to 80,000/L
           ni = min(ni,80.e+6_rtype)        !max to 80,000/L
+       else if (lims_flag .eq. .true.) then
+            if (masterproc) write(iulog,*) "no limits lims_flag", ni, nimix, nimoh, nilphf
+            nuc_lphom_flag = .false.
        endif
        
        nuci=ni+nimix+nimoh+nilphf
