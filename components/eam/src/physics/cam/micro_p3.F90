@@ -3050,7 +3050,7 @@ subroutine nucleati_bg(  &
           ni = min(ni,80.e+6_rtype)        !max to 80,000/L
        else if (lims_flag .eq. .true.) then
             if (masterproc) write(iulog,*) "no limits lims_flag", ni, nimix, nimoh, nilphf
-            nuc_lphom_flag = .false.
+            lims_flag = .false.
        endif
        
        nuci=ni+nimix+nimoh+nilphf
