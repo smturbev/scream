@@ -1240,7 +1240,7 @@ contains
     ! AaronDonahue, the following variable (p3_tend_out) is a catch-all for passing P3-specific variables outside of p3_main
     ! so that they can be written as ouput.  NOTE TO C++ PORT: This variable is entirely optional and doesn't need to be
     ! included in the port to C++, or can be changed if desired.
-    real(rtype), intent(out),   dimension(its:ite,kts:kte,49)   :: p3_tend_out ! micro physics tendencies
+    real(rtype), intent(out),   dimension(its:ite,kts:kte,58)   :: p3_tend_out ! micro physics tendencies
     real(rtype), intent(in),    dimension(its:ite,3)            :: col_location
     real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: inv_qc_relvar
 
@@ -1480,7 +1480,10 @@ contains
 
        call homogeneous_freezing(kts,kte,ktop,kbot,kdir,t_atm(i,:),inv_exner(i,:),latent_heat_fusion(i,:),  &
          qc(i,:),nc(i,:),qr(i,:),nr(i,:),qi(i,:),ni(i,:),qm(i,:),bm(i,:),th_atm(i,:))
-
+       
+       ! Ice nucleation (including from homogeneous freezing)
+       p3_tend_out(i,:,58) = ( ni(i,:) - ni_old(i,:) ) * inv_dt ! Ice  # microphysics tendency, measure
+       
        !...................................................
        ! final checks to ensure consistency of mass/number
        ! and compute diagnostic fields for output
@@ -5209,6 +5212,8 @@ subroutine homogeneous_freezing(kts,kte,ktop,kbot,kdir,t_atm,inv_exner,latent_he
          qr(k) = 0._rtype
          nr(k) = 0._rtype
       endif
+
+      ! if N_nuc > nsmall, we had ice nucleation via HOM freezing
 
    enddo k_loop_fz
 

@@ -1205,7 +1205,7 @@ end subroutine micro_p3_readnl
     if ( ixnuc > 0 ) then
         do k = 1,pver
             do icol = 1,ncol
-                if ( tend_out(icol,k,22) > 0._rtype ) then ! 22 ni_nucleat_tend; 50 nnuc
+                if ( tend_out(icol,k,58) > 0._rtype ) then ! 22 ni_nucleat_tend; 50 nnuc; 58 ice # nucleation tendency (similar to 47) but includes homogeneous_freezing
                     ptend%q(icol,k,ixnuc) = (1.0_rtype - state%q(icol,k,ixnuc)) / dtime
                     ptend%q(icol,k,ixnucni) = (numice(icol,k) - state%q(icol,k,ixnucni)) / dtime
                     w = - (state%omega(icol,k)) / (state%pmid(icol,k)) * rair*(state%t(icol,k)) * 0.102_rtype ! omega * 1/rho * 1/g  [m/s]; rho = p / (R*t) => 1/rho = R*t/p
