@@ -599,7 +599,8 @@ end subroutine micro_p3_readnl
    call addfld('P3_wpice',            (/ 'lev' /), 'A', 'kg/kg/s', 'P3 diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at Shom')
    call addfld('P3_weff',             (/ 'lev' /), 'A', 'kg/kg/s', 'P3 effective Vertical velocity for ice nucleation (m/s); weff=wbar-wpice')
    call addfld('P3_fhom',             (/ 'lev' /), 'A', 'kg/kg/s', 'P3 how much fraction of cloud can reach Shom')
-
+   call addfld('P3_qtend_homfrz',     (/ 'lev' /), 'A', 'kg/kg/s', 'P3 Tendency for ice mass due to homogeneous_freezing')
+   call addfld('P3_ntend_homfrz',     (/ 'lev' /), 'A', 'kg/kg/s', 'P3 Tendency for ice number due to homogeneous_freezing')
    ! phase change tendencies
    call addfld('vap_liq_exchange',  (/ 'lev' /), 'A', 'kg/kg/s', 'Tendency for conversion from/to vapor phase to/from liquid phase')
    call addfld('vap_ice_exchange',  (/ 'lev' /), 'A', 'kg/kg/s', 'Tendency for conversion from/to vapor phase to/from frozen phase')
@@ -705,6 +706,8 @@ end subroutine micro_p3_readnl
          call add_default('P3_wpice',     1, ' ')
          call add_default('P3_weff',     1, ' ')
          call add_default('P3_fhom',     1, ' ')
+         call add_default('P3_qtend_homfrz',   1, ' ')
+         call add_default('P3_ntend_homfrz',   1, ' ')
       end if
    end if
 
@@ -1205,7 +1208,8 @@ end subroutine micro_p3_readnl
     if ( ixnuc > 0 ) then
         do k = 1,pver
             do icol = 1,ncol
-                if ( tend_out(icol,k,58) > 0._rtype ) then ! 22 ni_nucleat_tend; 50 nnuc; 58 ice # nucleation tendency (similar to 47) but includes homogeneous_freezing
+                ! if ( tend_out(icol,k,22) > 0._rtype ) then
+                if ( (tend_out(icol,k,59)+tend_out(icol,k,22)+tend_out(icol,k,30)+tend_out(icol,k,31)) > 0._rtype ) then ! 22 ni_nucleat_tend; 50 nnuc; 59 hom ice nuc tend; 30 nc2ni_imm; 31 nr2ni_imm
                     ptend%q(icol,k,ixnuc) = (1.0_rtype - state%q(icol,k,ixnuc)) / dtime
                     ptend%q(icol,k,ixnucni) = (numice(icol,k) - state%q(icol,k,ixnucni)) / dtime
                     w = - (state%omega(icol,k)) / (state%pmid(icol,k)) * rair*(state%t(icol,k)) * 0.102_rtype ! omega * 1/rho * 1/g  [m/s]; rho = p / (R*t) => 1/rho = R*t/p
@@ -1556,6 +1560,8 @@ end subroutine micro_p3_readnl
    call outfld('P3_wpice',         tend_out(:,:,55), pcols, lchnk)
    call outfld('P3_weff',          tend_out(:,:,56), pcols, lchnk)
    call outfld('P3_fhom',          tend_out(:,:,57), pcols, lchnk)
+   call outfld('P3_qtend_homfrz',  tend_out(:,:,58), pcols, lchnk)
+   call outfld('P3_ntend_homfrz',  tend_out(:,:,59), pcols, lchnk)
    ! Phase change tendencies
    call outfld('vap_ice_exchange',      vap_ice_exchange,      pcols, lchnk)
    call outfld('vap_liq_exchange',      vap_liq_exchange,      pcols, lchnk)
