@@ -1240,7 +1240,7 @@ contains
     ! AaronDonahue, the following variable (p3_tend_out) is a catch-all for passing P3-specific variables outside of p3_main
     ! so that they can be written as ouput.  NOTE TO C++ PORT: This variable is entirely optional and doesn't need to be
     ! included in the port to C++, or can be changed if desired.
-    real(rtype), intent(out),   dimension(its:ite,kts:kte,58)   :: p3_tend_out ! micro physics tendencies
+    real(rtype), intent(out),   dimension(its:ite,kts:kte,59)   :: p3_tend_out ! micro physics tendencies
     real(rtype), intent(in),    dimension(its:ite,3)            :: col_location
     real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: inv_qc_relvar
 
@@ -1280,6 +1280,8 @@ contains
     real(rtype), dimension(its:ite,kts:kte) :: inv_dz,inv_rho,ze_ice,ze_rain,prec,rho,       &
          rhofacr,rhofaci,acn,latent_heat_sublim,latent_heat_vapor,latent_heat_fusion,qv_sat_l,qv_sat_i,qv_supersat_l,qv_supersat_i,       &
          tmparr1,exner,uzpl
+    ! Variables for homogeneous nucleation tendencies
+    real(rtype), dimension(its:ite,kts:kte) :: qnuc_hom, nnuc_hom
 
     ! -- scalar locals -- !
 
@@ -1340,6 +1342,8 @@ contains
     precip_liq_flux    = 0._rtype
     precip_ice_flux    = 0._rtype
     p3_tend_out = 0._rtype
+    qnuc_hom = 0._rtype
+    nnuc_hom = 0._rtype
 
     inv_cld_frac_i = 1.0_rtype/cld_frac_i
     inv_cld_frac_l = 1.0_rtype/cld_frac_l
@@ -1477,12 +1481,13 @@ contains
 
        !.......................................
        ! homogeneous freezing of cloud and rain
-
-       call homogeneous_freezing(kts,kte,ktop,kbot,kdir,t_atm(i,:),inv_exner(i,:),latent_heat_fusion(i,:),  &
-         qc(i,:),nc(i,:),qr(i,:),nr(i,:),qi(i,:),ni(i,:),qm(i,:),bm(i,:),th_atm(i,:))
+       ! homogeneous freezing tendencies output for ice mass and ice # in p3_tend_out(i,:,58 or 59) respectively
        
-       ! Ice nucleation (including from homogeneous freezing)
-       p3_tend_out(i,:,58) = ( ni(i,:) - ni_old(i,:) ) * inv_dt ! Ice  # microphysics tendency, measure
+       call homogeneous_freezing(kts,kte,ktop,kbot,kdir,t_atm(i,:),inv_exner(i,:),latent_heat_fusion(i,:),  &
+         qc(i,:),nc(i,:),qr(i,:),nr(i,:),qi(i,:),ni(i,:),qm(i,:),bm(i,:),th_atm(i,:), qnuc_hom(i,:), nnuc_hom(i,:))
+         
+       p3_tend_out(i,:,58) = (qnuc_hom(i,:)) * inv_dt ! Ice microphysics tendency, measure
+       p3_tend_out(i,:,59) = (nnuc_hom(i,:)) * inv_dt ! Ice # microphysics tendency, measure
        
        !...................................................
        ! final checks to ensure consistency of mass/number
@@ -2825,7 +2830,7 @@ subroutine nucleati_bg(  &
 
    !---MIXED-PHASE--------------------------------------------------------------------------
 
-   if ( ( (tc.lt.-35._rtype) .and. (tc.ge.-37._rtype) .and. (supersat_i.ge.0.05_rtype)  .and. (qc.gt.qsmall) ) .or. &
+   if ( ( (tc.lt.-15._rtype) .and. (tc.ge.-37._rtype) .and. (supersat_i.ge.0.05_rtype)  .and. (qc.gt.qsmall) ) .or. &
         ( (tc.lt.-32._rtype) .and. (tc.ge.-37._rtype) .and. (supersat_i.ge.0.005_rtype) .and. (qc.gt.qsmall) ) ) then 
         
         ! dep/cond-frzing for MIXED PHASE
@@ -5158,7 +5163,7 @@ subroutine calc_first_order_upwind_step(kts, kte, kdir, kbot, k_qxtop, dt_sub, r
 end subroutine calc_first_order_upwind_step
 
 subroutine homogeneous_freezing(kts,kte,ktop,kbot,kdir,t_atm,inv_exner,latent_heat_fusion,    &
-   qc,nc,qr,nr,qi,ni,qm,bm,th_atm)
+   qc,nc,qr,nr,qi,ni,qm,bm,th_atm,Q_nuc_hom,N_nuc_hom)
 
    !.......................................
    ! homogeneous freezing of cloud and rain
@@ -5181,8 +5186,12 @@ subroutine homogeneous_freezing(kts,kte,ktop,kbot,kdir,t_atm,inv_exner,latent_he
    real(rtype), intent(inout), dimension(kts:kte) :: bm
    real(rtype), intent(inout), dimension(kts:kte) :: th_atm
 
+   real(rtype), intent(out), dimension(kts:kte) :: Q_nuc_hom
+   real(rtype), intent(out), dimension(kts:kte) :: N_nuc_hom
+
    real(rtype) :: Q_nuc
    real(rtype) :: N_nuc
+   
    integer :: k
 
    k_loop_fz:  do k = kbot,ktop,kdir
@@ -5213,7 +5222,8 @@ subroutine homogeneous_freezing(kts,kte,ktop,kbot,kdir,t_atm,inv_exner,latent_he
          nr(k) = 0._rtype
       endif
 
-      ! if N_nuc > nsmall, we had ice nucleation via HOM freezing
+      Q_nuc_hom(k) = Q_nuc  ! output for nucleation tendency from homogeneous freezing
+      N_nuc_hom(k) = N_nuc  ! output for nucleation # tendency from homogeneous freezing
 
    enddo k_loop_fz
 
