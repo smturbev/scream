@@ -5191,6 +5191,10 @@ subroutine homogeneous_freezing(kts,kte,ktop,kbot,kdir,t_atm,inv_exner,latent_he
 
    real(rtype) :: Q_nuc
    real(rtype) :: N_nuc
+
+   ! initialize Q_nuc and N_nuc
+   Q_nuc_hom = 0._rtype
+   N_nuc_hom = 0._rtype
    
    integer :: k
 
@@ -5221,9 +5225,11 @@ subroutine homogeneous_freezing(kts,kte,ktop,kbot,kdir,t_atm,inv_exner,latent_he
          qr(k) = 0._rtype
          nr(k) = 0._rtype
       endif
-
-      Q_nuc_hom(k) = Q_nuc  ! output for nucleation tendency from homogeneous freezing
-      N_nuc_hom(k) = N_nuc  ! output for nucleation # tendency from homogeneous freezing
+      
+      if ((qr(k).ge.qsmall .and. t_atm(k).lt.T_homogfrz) .or. (qc(k).ge.qsmall .and. t_atm(k).lt.T_homogfrz)) then
+         Q_nuc_hom(k) = max(0._rtype, Q_nuc)  ! output for nucleation tendency from homogeneous freezing
+         N_nuc_hom(k) = max(0._rtype, N_nuc)  ! output for nucleation # tendency from homogeneous freezing
+      endif
 
    enddo k_loop_fz
 
